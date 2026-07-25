@@ -1,0 +1,24 @@
+[project]
+name = "markdown2pdf-base"
+version = "0.1.0"
+description = "Convert Markdown to PDF using markdown2html5-base and pandoc"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Anatoly Shcherbina", email = "avshcherbina@gmail.com" }
+]
+dependencies = [
+    "markdown2html5-base >= 0.1.0"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+markdown2pdf-base = "markdown2pdf_base.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
