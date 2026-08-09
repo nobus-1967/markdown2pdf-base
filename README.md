@@ -1,25 +1,6 @@
 # markdown2pdf-base
 
-Convert Markdown to PDF using 
-[markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and p
-andoc (xelatex).
-
-## CLI Usage
-
-```bash
-# Convert a file
-markdown2pdf-base input.md -o output.pdf
-
-# Output name defaults to input name with .pdf extension
-markdown2pdf-base input.md
-
-# Read from stdin, write to stdout
-cat input.md | markdown2pdf-base > output.pdf
-
-# Custom fonts
-markdown2pdf-base input.md -o output.pdf \
---cjk-font "Noto Sans CJK JP" --symbol-font "Symbola"
-```
+Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
 ## Features
 
@@ -42,3 +23,16 @@ All markdown2html5-base features are supported:
 - Hard line breaks (trailing `\` or two spaces)
 - HTML comments (`[comment]: #`)
 - Backslash escaping
+
+## How it works
+
+You can compare conversion results: original [Markdown file](./test_page/Test_Page.md) → use markdown2html5-base for [HTML5 file](./test_page/Test_Page.html) → use markdown2pdf-base for [PDF file](./test_page/Test_Page.pdf).
+
+You can also evaluate the results using CLI: `markdown2pdf-base input.md -o output.pdf`
+
+## Requirements
+
+- `markdown2html5-base >= 0.2.1`;
+- `pandoc` with Lua filter support;
+- `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fancyvrb`, `framed`;
+- Fonts (see [README](./markdown2pdf-base/README.md) for details).

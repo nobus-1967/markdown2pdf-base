@@ -2,6 +2,12 @@ import argparse
 import sys
 
 from markdown2pdf_base import convert, convert_file
+from markdown2pdf_base.converter import (
+    DEFAULT_CJK_JP_FONT,
+    DEFAULT_MAIN_FONT,
+    DEFAULT_MONO_FONT,
+    DEFAULT_SYMBOL_FONT,
+)
 
 
 def main() -> None:
@@ -12,18 +18,26 @@ def main() -> None:
         "input", nargs="?", type=str, help="Input Markdown file (defaults to stdin)"
     )
     parser.add_argument("-o", "--output", type=str, help="Output PDF file")
+    parser.add_argument("--lang", default=None, help="Document language (BCP 47)")
     parser.add_argument(
-        "--cjk-font", default=None, help="CJK font name (default: Noto Sans CJK SC)"
+        "--main-font",
+        default=None,
+        help=f"Main text font name (default: {DEFAULT_MAIN_FONT})",
+    )
+    parser.add_argument(
+        "--cjk-font",
+        default=None,
+        help=f"CJK font name (default by language: {DEFAULT_CJK_JP_FONT})",
     )
     parser.add_argument(
         "--mono-font",
         default=None,
-        help="Monospace font name (default: Noto Sans Mono CJK SC)",
+        help=f"Monospace font name (default: {DEFAULT_MONO_FONT})",
     )
     parser.add_argument(
         "--symbol-font",
-        default="Symbola",
-        help="Symbol/emoji font name (default: Symbola)",
+        default=None,
+        help=f"Symbol/emoji font name (default: {DEFAULT_SYMBOL_FONT})",
     )
 
     args = parser.parse_args()
@@ -33,6 +47,10 @@ def main() -> None:
         sys.exit(1)
 
     kwargs = {}
+    if args.lang:
+        kwargs["lang"] = args.lang
+    if args.main_font:
+        kwargs["main_font"] = args.main_font
     if args.cjk_font:
         kwargs["cjk_font"] = args.cjk_font
     if args.mono_font:
