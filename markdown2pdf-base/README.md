@@ -2,11 +2,11 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.2.0 — feature-aligned with `markdown2html5-base` 0.2.1.
+Version 0.2.1 — feature-aligned with `markdown2html5-base` 0.2.2.
 
 ## Requirements
 
-- `markdown2html5-base >= 0.2.1` (Python package)
+- `markdown2html5-base >= 0.2.2` (Python package)
 - `pandoc` with Lua filter support
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fancyvrb`, `framed`
 - Fonts (see [Fonts](#fonts)); run `fc-list`/`fc-match` from fontconfig for fallback detection
@@ -51,7 +51,7 @@ data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
 
 ## Features
 
-All `markdown2html5-base` 0.2.1 operations are supported:
+All `markdown2html5-base` 0.2.2 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline
@@ -130,7 +130,7 @@ The generated LaTeX header additionally guards every font declaration with `\IfF
 
 ## Notes
 
-- Emoji and symbols are detected by Unicode block in the Lua filter and rendered through the symbol font, so adjacent text always stays in the main font (no `ucharclasses` font leaking).
+- Emoji and symbols are detected by Unicode block (including Mathematical Operators) in the Lua filter and rendered through the symbol font, so adjacent text always stays in the main font (no `ucharclasses` font leaking).
 - Ruby annotations are converted to LaTeX `\ruby{}{}` via a Lua filter.
 - Footnotes render as a superscript link plus a footnotes list at the end.
 - Inline code is printed on a light gray background (`RGB(245,245,245)`) via a `\colorbox` redefinition of `\texttt`.

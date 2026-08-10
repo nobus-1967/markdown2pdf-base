@@ -32,7 +32,7 @@ You can also evaluate the results using CLI: `markdown2pdf-base input.md -o outp
 
 ## Requirements
 
-- `markdown2html5-base >= 0.2.1`;
+- `markdown2html5-base >= 0.2.2`;
 - `pandoc` with Lua filter support;
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fancyvrb`, `framed`;
-- Fonts (see [README](./markdown2pdf-base/README.md) for details).
+- fonts (see [README](./markdown2pdf-base/README.md) for details).

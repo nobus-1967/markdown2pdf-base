@@ -9,8 +9,6 @@ import warnings
 
 from markdown2html5_base import MarkdownToHTML
 
-__version__ = "0.2.0"
-
 DEFAULT_MAIN_FONT = "Noto Sans"
 DEFAULT_MONO_FONT = "Noto Sans Mono"
 DEFAULT_CJK_JP_FONT = "Noto Sans CJK JP"
@@ -198,6 +196,7 @@ def _guard_font_set(set_command: str, chain: list[str]) -> str:
 
 _LUA_FILTER_CODE = """local symbol_blocks = {
   {0x2190, 0x21FF}, -- Arrows
+  {0x2200, 0x22FF}, -- Mathematical Operators
   {0x2300, 0x23FF}, -- Miscellaneous Technical
   {0x25A0, 0x25FF}, -- Geometric Shapes
   {0x2600, 0x26FF}, -- Miscellaneous Symbols
