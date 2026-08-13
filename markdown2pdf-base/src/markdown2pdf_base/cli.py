@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-from markdown2pdf_base import convert, convert_file
+from markdown2pdf_base import __version__, convert, convert_file
 from markdown2pdf_base.converter import (
     DEFAULT_CJK_JP_FONT,
     DEFAULT_MAIN_FONT,
@@ -13,6 +13,13 @@ from markdown2pdf_base.converter import (
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert Markdown to PDF using markdown2html5-base + pandoc"
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show the library version and exit",
     )
     parser.add_argument(
         "input", nargs="?", type=str, help="Input Markdown file (defaults to stdin)"

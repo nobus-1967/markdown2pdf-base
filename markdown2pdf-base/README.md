@@ -2,13 +2,13 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.2.1 — feature-aligned with `markdown2html5-base` 0.2.2.
+Version 0.2.2 — feature-aligned with `markdown2html5-base` 0.2.4. Inline code is wrapped with `seqsplit` so long runs break across lines; heading code uses plain `\texttt` (seqsplit is unsafe in moving arguments).
 
 ## Requirements
 
-- `markdown2html5-base >= 0.2.2` (Python package)
+- `markdown2html5-base >= 0.2.4` (Python package)
 - `pandoc` with Lua filter support
-- `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fancyvrb`, `framed`
+- `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `seqsplit`
 - Fonts (see [Fonts](#fonts)); run `fc-list`/`fc-match` from fontconfig for fallback detection
 
 ## CLI Usage
@@ -44,14 +44,14 @@ markdown2pdf-base input.md -o output.pdf \
 ```python
 from markdown2pdf_base import convert, convert_file
 
-convert_file("input.md", "output.pdf")          # write to file
-data = convert("# Hello", None)                 # returns PDF bytes
+convert_file("input.md", "output.pdf")  # write to file
+data = convert("# Hello", None)  # returns PDF bytes
 data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
 ```
 
 ## Features
 
-All `markdown2html5-base` 0.2.2 operations are supported:
+All `markdown2html5-base` 0.2.3 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline
@@ -133,6 +133,6 @@ The generated LaTeX header additionally guards every font declaration with `\IfF
 - Emoji and symbols are detected by Unicode block (including Mathematical Operators) in the Lua filter and rendered through the symbol font, so adjacent text always stays in the main font (no `ucharclasses` font leaking).
 - Ruby annotations are converted to LaTeX `\ruby{}{}` via a Lua filter.
 - Footnotes render as a superscript link plus a footnotes list at the end.
-- Inline code is printed on a light gray background (`RGB(245,245,245)`) via a `\colorbox` redefinition of `\texttt`.
-- Fenced code blocks are typeset in the mono font with straight quotes inside a light gray frame (`RGB(180,180,180)`) via a `fancyvrb` `verbatim` override.
+- Inline code is printed in the mono font colored mid-gray (`RGB(90,90,90)`). Long runs that would overflow a line are wrapped with `seqsplit` (it breaks anywhere, without hyphens) via the `\seqcode` macro; short runs and any code inside headings use plain `\texttt` — `seqsplit` is unsafe in moving arguments such as bookmarks and the table of contents.
+- Fenced code blocks are typeset in the mono font inside a light gray frame (`RGB(180,180,180)`) via an `fvextra` `verbatim` override with line breaking enabled (`breaklines`); wrapped lines show no break symbol.
 - The running header (`title (author: published)`) in the top margin is colored mid-gray (`RGB(90,90,90)`).

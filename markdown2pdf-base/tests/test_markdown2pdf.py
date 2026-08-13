@@ -305,3 +305,59 @@ def test_convert_japanese_ruby(tmp_path):
     data = convert(md, None, lang="ja")
     assert data is not None
     assert data.startswith(b"%PDF")
+
+
+@needs_pandoc
+def test_convert_inline_code_special_chars(tmp_path):
+    import subprocess
+
+    md = (
+        "Code `a_b.c%#d&$` caret `x^y` tilde `a~b` "
+        "backslash `foo\\bar` long "
+        "`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaafoo_bar.baz` end.\n"
+    )
+    data = convert(md, None)
+    assert data is not None
+    pdf_path = tmp_path / "code.pdf"
+    pdf_path.write_bytes(data)
+    text = subprocess.run(
+        ["pdftotext", str(pdf_path), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    assert "a_b.c%#d&$" in text
+    assert "x^y" in text
+    assert "a~b" in text
+    assert "foo\\bar" in text
+    assert "foo_bar.baz" in text
+
+
+@needs_pandoc
+def test_convert_inline_code_in_heading(tmp_path):
+    import subprocess
+
+    # seqsplit is unsafe in moving arguments (bookmarks/toc); heading code
+    # must render as plain texttt without seqsplit.
+    md = (
+        "# Title `<code>markdown2html5-base</code>`\n\n"
+        "Body with `x^y` and long "
+        "`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaafoo_bar` end.\n"
+    )
+    data = convert(md, None)
+    assert data is not None
+    pdf_path = tmp_path / "head.pdf"
+    pdf_path.write_bytes(data)
+    text = subprocess.run(
+        ["pdftotext", str(pdf_path), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    assert "Title <code>markdown2html5-base</code>" in text
+    assert "x^y" in text
+    assert "foo_bar" in text

@@ -90,23 +90,28 @@ _LATEX_PREAMBLE = r"""\usepackage[margin=25.4mm]{geometry}
 \usepackage{newunicodechar}
 \usepackage{ruby}
 \usepackage{framed}
-\usepackage{fancyvrb}
+\usepackage{fvextra}
+\usepackage{seqsplit}
 \definecolor{shadecolor}{RGB}{245,245,245}
-\definecolor{codegray}{RGB}{245,245,245}
 \definecolor{codeframe}{RGB}{180,180,180}
+\definecolor{codeinline}{RGB}{90,90,90}
 \definecolor{headgray}{RGB}{90,90,90}
 \makeatletter
 \newenvironment{ShadedVerbatim}{%%
   \VerbatimEnvironment
-  \begin{Verbatim}[frame=single, rulecolor=\color{codeframe}]%%
+  \begin{minipage}[t]{\linewidth}%%
+  \begin{Verbatim}[frame=single, rulecolor=\color{codeframe}, breaklines, breaksymbolleft={}]%%
 }{%%
   \end{Verbatim}%%
+  \end{minipage}%%
 }
 \let\verbatim\ShadedVerbatim
 \let\endverbatim\endShadedVerbatim
 \makeatother
+\emergencystretch=1.5em
 \let\oldtexttt\texttt
-\renewcommand{\texttt}[1]{\colorbox{codegray}{\oldtexttt{#1}}}
+\renewcommand{\texttt}[1]{\oldtexttt{\textcolor{codeinline}{#1}}}
+\newcommand{\seqcode}[1]{\oldtexttt{\textcolor{codeinline}{\seqsplit{#1}}}}
 \renewcommand{\rubysep}{0.3ex}
 \newunicodechar{^^^^2026}{\ldots}
 \newunicodechar{^^^^22ef}{\ldots}
@@ -247,6 +252,74 @@ function Str(el)
   return out
 end
 
+local code_escapes = {
+  ['\\\\'] = '\\\\textbackslash{}',
+  ['{'] = '\\\\{',
+  ['}'] = '\\\\}',
+  ['$'] = '\\\\$',
+  ['&'] = '\\\\&',
+  ['#'] = '\\\\#',
+  ['_'] = '\\\\_',
+  ['%%'] = '\\\\%%',
+  ['^'] = '\\\\textasciicircum{}',
+  ['~'] = '\\\\textasciitilde{}',
+  ['<'] = '\\\\textless{}',
+  ['>'] = '\\\\textgreater{}',
+}
+
+local function latex_escape_code(text)
+  local out = {}
+  for ch in text:gmatch('.[\\128-\\191]*') do
+    out[#out + 1] = code_escapes[ch] or ch
+  end
+  return table.concat(out)
+end
+
+local hdr_walker = {
+  Code = function(el)
+    return pandoc.RawInline('latex',
+      '\\\\texttt{' .. latex_escape_code(el.text) .. '}')
+  end,
+}
+local function code_emit(el)
+  local escaped = latex_escape_code(el.text)
+  -- seqsplit breaks on empty/whitespace/edge braces; only use it for
+  -- substantive runs that can actually overflow a line.
+  local raw = el.text
+  if escaped == '' or raw:match('^%%s+$') or raw:match('^%%s') or raw:match('%%s$')
+     or #raw < 40 then
+    return pandoc.RawInline('latex', '\\\\texttt{' .. escaped .. '}')
+  end
+  return pandoc.RawInline('latex', '\\\\seqcode{' .. escaped .. '}')
+end
+local body_walker = {
+  Code = code_emit,
+}
+
+function Pandoc(doc)
+  local out = pandoc.List()
+  for _, b in ipairs(doc.blocks) do
+    if b.t == 'Header' then
+      -- Plain texttt: seqsplit is unsafe in moving arguments (bookmarks/toc)
+      local cc = pandoc.List()
+      for _, inl in ipairs(b.content) do
+        local res = pandoc.walk_inline(inl, hdr_walker)
+        if res.tag then
+          cc:insert(res)
+        else
+          for _, x in ipairs(res) do cc:insert(x) end
+        end
+      end
+      b.content = cc
+      out:insert(b)
+    else
+      out:insert(pandoc.walk_block(b, body_walker))
+    end
+  end
+  doc.blocks = out
+  return doc
+end
+
 function Span(el)
   local rt = el.attributes['rt']
   if rt then
@@ -303,20 +376,24 @@ def _select_font(family: str, fallbacks: list[str]) -> str:
     return family
 
 
+def _is_traditional_chinese(lang: str | None) -> bool:
+    return (lang or "").lower().startswith(("zh-hant", "zh-tw", "zh-hk", "zh-mo"))
+
+
 def _cjk_fallback_chain(lang: str | None) -> list[str]:
     lang = (lang or "").lower()
     if lang.startswith("zh"):
-        if lang.startswith(("zh-hant", "zh-tw", "zh-hk", "zh-mo")):
-            return CJK_TC_FALLBACKS
-        return CJK_SC_FALLBACKS
+        return CJK_TC_FALLBACKS if _is_traditional_chinese(lang) else CJK_SC_FALLBACKS
     return CJK_JP_FALLBACKS
 
 
 def _default_cjk_font(lang: str | None) -> str:
     if (lang or "").lower().startswith("zh"):
-        if (lang or "").lower().startswith(("zh-hant", "zh-tw", "zh-hk", "zh-mo")):
-            return DEFAULT_CJK_TC_FONT
-        return DEFAULT_CJK_SC_FONT
+        return (
+            DEFAULT_CJK_TC_FONT
+            if _is_traditional_chinese(lang)
+            else DEFAULT_CJK_SC_FONT
+        )
     return DEFAULT_CJK_JP_FONT
 
 
