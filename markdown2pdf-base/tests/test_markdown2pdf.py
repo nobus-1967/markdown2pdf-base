@@ -122,6 +122,11 @@ def test_h6_to_bold_italic_para():
     )
 
 
+def test_h6_to_bold_italic_para_keeps_anchor():
+    result = _h6_to_bold_italic_para('<h6 id="others">Others</h6>')
+    assert result == '<a id="others"></a><p><strong><em>Others</em></strong></p>'
+
+
 # ---------------------------------------------------------------------------
 # Document assembly
 # ---------------------------------------------------------------------------

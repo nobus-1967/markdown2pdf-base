@@ -453,9 +453,18 @@ def _is_full_document(html: str) -> bool:
 
 
 def _h6_to_bold_italic_para(html: str) -> str:
+    def _convert(m: re.Match) -> str:
+        attrs = m.group(1)
+        anchor = ""
+        id_match = re.search(r'\sid="([^"]*)"', attrs)
+        if id_match:
+            anchor = f'<a id="{id_match.group(1)}"></a>'
+            attrs = attrs.replace(id_match.group(0), "", 1)
+        return f"{anchor}<p{attrs}><strong><em>{m.group(2)}</em></strong></p>"
+
     return re.sub(
         r"<h6([^>]*)>(.*?)</h6>",
-        lambda m: f"<p{m.group(1)}><strong><em>{m.group(2)}</em></strong></p>",
+        _convert,
         html,
         flags=re.DOTALL,
     )
