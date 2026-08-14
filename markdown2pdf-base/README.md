@@ -2,7 +2,7 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.2.2 — feature-aligned with `markdown2html5-base` 0.2.4. Inline code is wrapped with `seqsplit` so long runs break across lines; heading code uses plain `\texttt` (seqsplit is unsafe in moving arguments).
+Version 0.2.3 — feature-aligned with `markdown2html5-base` 0.2.5. Inline code is wrapped with `seqsplit` so long runs break across lines; heading code uses plain `\texttt` (seqsplit is unsafe in moving arguments).
 
 ## Requirements
 
@@ -51,10 +51,10 @@ data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
 
 ## Features
 
-All `markdown2html5-base` 0.2.3 operations are supported:
+All `markdown2html5-base` 0.2.5 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography)
-- Bold, italic, strikethrough, highlight, subscript, superscript, underline
+- Bold, italic, strikethrough, highlight, subscript, superscript, underline (now `<u>` tag instead of `<ins>`)
 - Inline code and fenced code blocks
 - Links and images (relative paths resolved automatically)
 - Horizontal rules
