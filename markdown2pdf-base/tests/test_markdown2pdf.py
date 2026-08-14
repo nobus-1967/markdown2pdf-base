@@ -1,6 +1,7 @@
 import shutil
 
 import pytest
+
 from markdown2pdf_base.converter import (
     DEFAULT_CJK_JP_FONT,
     DEFAULT_CJK_SC_FONT,
@@ -23,6 +24,7 @@ from markdown2pdf_base.converter import (
     _ruby_to_span,
     _select_font,
     _strip_footnote_backref,
+    _strip_image_titles,
     _strip_metadata_tags,
     _strip_variation_selectors,
     _wrap_html,
@@ -52,6 +54,20 @@ def test_strip_footnote_backref():
         '<li id="fn:1">Body <a href="#fnref:1" class="footnote-backref">&uarr;</a></li>'
     )
     assert _strip_footnote_backref(html) == '<li id="fn:1">Body</li>'
+
+
+def test_strip_image_titles():
+    assert (
+        _strip_image_titles('<img src="a.png" alt="x" title="Title">')
+        == '<img src="a.png" alt="x">'
+    )
+    assert (
+        _strip_image_titles('<img title="T" src="a.png" alt="x">')
+        == '<img src="a.png" alt="x">'
+    )
+    assert (
+        _strip_image_titles('<img src="a.png" alt="x">') == '<img src="a.png" alt="x">'
+    )
 
 
 def test_normalize_quotes():

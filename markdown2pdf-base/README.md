@@ -2,11 +2,11 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.2.4 — feature-aligned with `markdown2html5-base` 0.2.5. Inline code is wrapped with `seqsplit` so long runs break across lines; heading code uses plain `\texttt` (seqsplit is unsafe in moving arguments).
+Version 0.2.5 — feature-aligned with `markdown2html5-base` 0.2.6. Inline code is wrapped with `seqsplit` so long runs break across lines; heading code uses plain `\texttt` (seqsplit is unsafe in moving arguments).
 
 ## Requirements
 
-- `markdown2html5-base >= 0.2.4` (Python package)
+- `markdown2html5-base >= 0.2.6` (Python package)
 - `pandoc` with Lua filter support
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `seqsplit`
 - Fonts (see [Fonts](#fonts)); run `fc-list`/`fc-match` from fontconfig for fallback detection
@@ -51,12 +51,12 @@ data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
 
 ## Features
 
-All `markdown2html5-base` 0.2.5 operations are supported:
+All `markdown2html5-base` 0.2.6 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline (now `<u>` tag instead of `<ins>`)
 - Inline code and fenced code blocks
-- Links and images (relative paths resolved automatically)
+- Links and images (relative paths resolved automatically; image titles such as `![alt](img.png "Title")` are omitted in the PDF)
 - Horizontal rules
 - Unordered, ordered, and task lists (checkboxes)
 - Blockquotes

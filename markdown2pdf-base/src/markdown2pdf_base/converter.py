@@ -417,6 +417,10 @@ def _strip_footnote_backref(html: str) -> str:
     return re.sub(r'\s*<a[^>]*class="footnote-backref"[^>]*>.*?</a>', "", html)
 
 
+def _strip_image_titles(html: str) -> str:
+    return re.sub(r'(<img\b[^>]*?)\s+title="[^"]*"([^>]*>)', r"\1\2", html)
+
+
 def _normalize_quotes(html: str) -> str:
     return (
         html.replace("\u201c", '"')
@@ -628,6 +632,7 @@ def _process_html(
         full = _resolve_image_src(full, source_dir)
     full = _normalize_quotes(full)
     full = _strip_footnote_backref(full)
+    full = _strip_image_titles(full)
     full = _strip_variation_selectors(full)
     full = _ruby_to_span(full)
     full = _h6_to_bold_italic_para(full)

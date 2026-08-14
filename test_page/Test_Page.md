@@ -61,7 +61,7 @@ print("Hello, World!")
 | Total    | 6   | $8.50 |
 
 
-![Image](mark_editor.png)
+![Markdown Image](mark_editor.png "Markdown Editor")
 
 ***
 
