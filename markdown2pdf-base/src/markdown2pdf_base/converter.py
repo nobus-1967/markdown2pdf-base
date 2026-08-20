@@ -246,7 +246,6 @@ _LUA_FILTER_CODE = """local symbol_blocks = {
 }
 
 local RUBY_CJK_FONT = '%s'
-local MAIN_CJK = '%s'
 
 local function is_symbol(ch)
   if ch:byte() < 0x80 then return false end
@@ -269,10 +268,6 @@ local function char_class(ch)
   if n >= 0x1100 and n <= 0x11FF then return 'kr' end
   if n >= 0x3130 and n <= 0x318F then return 'kr' end
   if n >= 0xAC00 and n <= 0xD7A3 then return 'kr' end
-  if n >= 0x3400 and n <= 0x4DBF then return 'main' end
-  if n >= 0x4E00 and n <= 0x9FFF then return 'main' end
-  if n >= 0xF900 and n <= 0xFAFF then return 'main' end
-  if n >= 0x20000 and n <= 0x2FA1F then return 'main' end
   return 'latin'
 end
 
@@ -288,8 +283,6 @@ local function wrap_scripts(text)
         out:insert(pandoc.RawInline('latex', '{\\\\cjkja{' .. buf .. '}}'))
       elseif cls == 'kr' then
         out:insert(pandoc.RawInline('latex', '{\\\\cjkkr{' .. buf .. '}}'))
-      elseif cls == 'main' then
-        out:insert(pandoc.RawInline('latex', '{\\\\' .. MAIN_CJK .. '{' .. buf .. '}}'))
       else
         out:insert(pandoc.Str(buf))
       end
@@ -605,11 +598,27 @@ function Pandoc(doc)
   return doc
 end
 
+local function plain_text(inlines)
+  local parts = {}
+  for _, x in ipairs(inlines) do
+    if x.t == 'Str' then
+      parts[#parts + 1] = x.text
+    elseif x.t == 'RawInline' then
+      parts[#parts + 1] = x.text:match('{\\\\cjk%%a+{(.-)}}')
+        or x.text:match('{\\\\symbolfont{(.-)}}')
+        or x.text
+    else
+      parts[#parts + 1] = pandoc.utils.stringify(x)
+    end
+  end
+  return table.concat(parts)
+end
+
 function Span(el)
   local rt = el.attributes['rt']
   if rt then
     el.attributes['rt'] = nil
-    local base = pandoc.utils.stringify(el.content)
+    local base = plain_text(el.content)
     local cjk = RUBY_CJK_FONT
     return pandoc.RawInline('latex', '{\\\\CJKfontspec{' .. cjk .. '}\\\\ruby{' .. base .. '}{' .. rt .. '}}')
   end
@@ -848,9 +857,8 @@ def _make_latex_header(
 
 def _write_lua_filter(path: str, cjk_fonts: dict[str, str], main_cjk_key: str) -> None:
     ruby_font = cjk_fonts[main_cjk_key]
-    main_family = _cjk_family_name(main_cjk_key)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(_LUA_FILTER_CODE % (ruby_font, main_family))
+        f.write(_LUA_FILTER_CODE % ruby_font)
 
 
 # ---------------------------------------------------------------------------

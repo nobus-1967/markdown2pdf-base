@@ -318,10 +318,10 @@ def test_write_lua_filter_uses_cjk_fonts(tmp_path):
     _write_lua_filter(str(path), cjk_fonts, "ja")
     text = path.read_text(encoding="utf-8")
     assert "local RUBY_CJK_FONT = 'Noto Serif CJK JP'" in text
-    assert "local MAIN_CJK = 'cjkja'" in text
     assert "%s" not in text
     assert "RUBY_CJK_FONT" in text
-    assert "MAIN_CJK" in text
+    assert "cjkja" in text
+    assert "cjkkr" in text
 
 
 def test_select_font_falls_back_on_missing():
