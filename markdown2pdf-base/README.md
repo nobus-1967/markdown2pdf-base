@@ -2,7 +2,7 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.3.0 — feature-aligned with `markdown2html5-base` 0.3.5. Inline code is rendered in plain black mono; long runs break across lines via `\allowbreak` insertion; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments).
+Version 0.3.1 — feature-aligned with `markdown2html5-base` 0.3.5. Inline code is rendered in plain black mono; long runs break across lines via `\allowbreak` insertion; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments). Per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously in one document.
 
 ## Requirements
 
@@ -26,20 +26,31 @@ cat input.md | markdown2pdf-base > output.pdf
 # Custom fonts and document language
 markdown2pdf-base input.md -o output.pdf \
   --lang ja --main-font "Noto Serif" --head-font "Noto Sans" \
-  --cjk-font "Noto Serif CJK JP" --mono-font "Noto Sans Mono" \
+  --cjk-ja-font "Noto Serif CJK JP" --mono-font "Noto Sans Mono" \
   --symbol-font "Symbola"
 ```
 
 ### Options
 
-| Option           | Description                                          | Default            |
-| ---------------- | ---------------------------------------------------- | ------------------ |
-| `--lang`         | Document language (BCP 47, e.g. `ja`, `zh-CN`)       | from front matter  |
-| `--main-font`    | Main text font                                       | `Noto Serif`       |
-| `--head-font`    | Heading font                                         | `Noto Sans`        |
-| `--cjk-font`     | CJK font (overrides language-based default)          | by language        |
-| `--mono-font`    | Monospace font                                       | `Noto Sans Mono`   |
-| `--symbol-font`  | Symbol/emoji font                                    | `Symbola`          |
+| Option            | Description                                          | Default            |
+| ----------------- | ---------------------------------------------------- | ------------------ |
+| `--lang`          | Document language (BCP 47, e.g. `ja`, `zh-CN`)       | from front matter  |
+| `--main-font`     | Main text font                                       | `Noto Serif`       |
+| `--head-font`     | Heading font                                         | `Noto Sans`        |
+| `--cjk-font`      | CJK font override for the document language          | by language        |
+| `--cjk-ja-font`   | Japanese CJK font                                    | `Noto Serif CJK JP` |
+| `--cjk-cn-font`   | Simplified Chinese CJK font                          | `Noto Serif CJK SC` |
+| `--cjk-tw-font`   | Traditional Chinese (Taiwan) CJK font                | `Noto Serif CJK TC` |
+| `--cjk-hk-font`   | Hong Kong CJK font                                   | `Noto Serif CJK HK` |
+| `--cjk-kr-font`   | Korean CJK font                                      | `Noto Serif CJK KR` |
+| `--mono-font`     | Monospace font                                       | `Noto Sans Mono`   |
+| `--symbol-font`   | Symbol/emoji font                                    | `Symbola`          |
+
+The per-language `--cjk-*-font` options can be used simultaneously in one
+document. Text is routed to the matching CJK font by script: Hiragana and
+Katakana use the Japanese font, Hangul uses the Korean font, and Han
+characters use the font for the document language (see the `lang` mapping
+below).
 
 ## Python API
 
@@ -50,6 +61,13 @@ convert_file("input.md", "output.pdf")  # write to file
 data = convert("# Hello", None)  # returns PDF bytes
 data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
 data = convert("# Hi", None, main_font="Noto Serif", head_font="Noto Sans")
+# Per-language CJK fonts, usable simultaneously
+data = convert(
+    "# 混合",
+    None,
+    lang="ja",
+    cjk_fonts={"ja": "Noto Serif CJK JP", "kr": "Noto Serif CJK KR"},
+)
 ```
 
 ## Features

@@ -17,6 +17,15 @@ DEFAULT_CJK_ZH_CN_FONT = "Noto Serif CJK SC"
 DEFAULT_CJK_ZH_TW_FONT = "Noto Serif CJK TC"
 DEFAULT_CJK_ZH_HK_FONT = "Noto Serif CJK HK"
 DEFAULT_CJK_KR_FONT = "Noto Serif CJK KR"
+
+CJK_FONT_KEYS = ("ja", "cn", "tw", "hk", "kr")
+CJK_DEFAULT_FONTS = {
+    "ja": DEFAULT_CJK_JP_FONT,
+    "cn": DEFAULT_CJK_ZH_CN_FONT,
+    "tw": DEFAULT_CJK_ZH_TW_FONT,
+    "hk": DEFAULT_CJK_ZH_HK_FONT,
+    "kr": DEFAULT_CJK_KR_FONT,
+}
 DEFAULT_SYMBOL_FONT = "Symbola"
 
 _CSS = """\
@@ -209,6 +218,18 @@ def _guard_font_set(set_command: str, chain: list[str]) -> str:
     return head + tail + "}" * (len(chain) - 1)
 
 
+def _guard_new_cjk_family(family: str, chain: list[str]) -> str:
+    chain = list(dict.fromkeys(chain))
+    cmd = f"\\newCJKfontfamily{{\\{family}}}"
+    if len(chain) == 1:
+        return f"{cmd}{{{chain[0]}}}"
+    head = "".join(
+        f"\\IfFontExistsTF{{{name}}}{{{cmd}{{{name}}}}}{{" for name in chain[:-1]
+    )
+    tail = f"{cmd}{{{chain[-1]}}}"
+    return head + tail + "}" * (len(chain) - 1)
+
+
 _LUA_FILTER_CODE = """local symbol_blocks = {
   {0x2190, 0x21FF}, -- Arrows
   {0x2200, 0x22FF}, -- Mathematical Operators
@@ -224,6 +245,9 @@ _LUA_FILTER_CODE = """local symbol_blocks = {
   {0x1F900, 0x1F9FF}, -- Supplemental Symbols
 }
 
+local RUBY_CJK_FONT = '%s'
+local MAIN_CJK = '%s'
+
 local function is_symbol(ch)
   if ch:byte() < 0x80 then return false end
   local n = utf8.codepoint(ch)
@@ -233,29 +257,59 @@ local function is_symbol(ch)
   return false
 end
 
-local function wrap_symbols(text)
+local function char_class(ch)
+  if ch:byte() < 0x80 then return 'latin' end
+  local n = utf8.codepoint(ch)
+  for _, r in ipairs(symbol_blocks) do
+    if n >= r[1] and n <= r[2] then return 'symbol' end
+  end
+  if n >= 0x3040 and n <= 0x30FF then return 'ja' end
+  if n >= 0x31F0 and n <= 0x31FF then return 'ja' end
+  if n >= 0xFF66 and n <= 0xFF9F then return 'ja' end
+  if n >= 0x1100 and n <= 0x11FF then return 'kr' end
+  if n >= 0x3130 and n <= 0x318F then return 'kr' end
+  if n >= 0xAC00 and n <= 0xD7A3 then return 'kr' end
+  if n >= 0x3400 and n <= 0x4DBF then return 'main' end
+  if n >= 0x4E00 and n <= 0x9FFF then return 'main' end
+  if n >= 0xF900 and n <= 0xFAFF then return 'main' end
+  if n >= 0x20000 and n <= 0x2FA1F then return 'main' end
+  return 'latin'
+end
+
+local function wrap_scripts(text)
   local out = pandoc.List()
   local buf = ''
+  local cls = 'latin'
   local function flush()
     if buf ~= '' then
-      out:insert(pandoc.Str(buf))
+      if cls == 'symbol' then
+        out:insert(pandoc.RawInline('latex', '{\\\\symbolfont{' .. buf .. '}}'))
+      elseif cls == 'ja' then
+        out:insert(pandoc.RawInline('latex', '{\\\\cjkja{' .. buf .. '}}'))
+      elseif cls == 'kr' then
+        out:insert(pandoc.RawInline('latex', '{\\\\cjkkr{' .. buf .. '}}'))
+      elseif cls == 'main' then
+        out:insert(pandoc.RawInline('latex', '{\\\\' .. MAIN_CJK .. '{' .. buf .. '}}'))
+      else
+        out:insert(pandoc.Str(buf))
+      end
       buf = ''
     end
   end
   for ch in text:gmatch('.[\\128-\\191]*') do
-    if is_symbol(ch) then
+    local c = char_class(ch)
+    if c ~= cls then
       flush()
-      out:insert(pandoc.RawInline('latex', '{\\\\symbolfont{' .. ch .. '}}'))
-    else
-      buf = buf .. ch
+      cls = c
     end
+    buf = buf .. ch
   end
   flush()
   return out
 end
 
 function Str(el)
-  local out = wrap_symbols(el.text)
+  local out = wrap_scripts(el.text)
   if #out == 1 and out[1].t == 'Str' and out[1].text == el.text then
     return nil
   end
@@ -556,7 +610,7 @@ function Span(el)
   if rt then
     el.attributes['rt'] = nil
     local base = pandoc.utils.stringify(el.content)
-    local cjk = '%s'
+    local cjk = RUBY_CJK_FONT
     return pandoc.RawInline('latex', '{\\\\CJKfontspec{' .. cjk .. '}\\\\ruby{' .. base .. '}{' .. rt .. '}}')
   end
   for _, c in ipairs(el.classes) do
@@ -616,17 +670,21 @@ def _is_traditional_chinese(lang: str | None) -> bool:
     return (lang or "").lower().startswith(("zh-hant", "zh-tw", "zh-mo"))
 
 
-def _default_cjk_font(lang: str | None) -> str:
+def _cjk_key_for_lang(lang: str | None) -> str:
     lang = (lang or "").lower()
     if lang.startswith("zh"):
         if lang in ("zh-hk", "zh-hant-hk"):
-            return DEFAULT_CJK_ZH_HK_FONT
+            return "hk"
         if _is_traditional_chinese(lang):
-            return DEFAULT_CJK_ZH_TW_FONT
-        return DEFAULT_CJK_ZH_CN_FONT
+            return "tw"
+        return "cn"
     if lang.startswith("ko"):
-        return DEFAULT_CJK_KR_FONT
-    return DEFAULT_CJK_JP_FONT
+        return "kr"
+    return "ja"
+
+
+def _default_cjk_font(lang: str | None) -> str:
+    return CJK_DEFAULT_FONTS[_cjk_key_for_lang(lang)]
 
 
 # ---------------------------------------------------------------------------
@@ -749,16 +807,31 @@ def _inject_css(full_html: str, main: str, mono: str) -> str:
     )
 
 
+def _cjk_family_name(key: str) -> str:
+    return f"cjk{key}"
+
+
 def _make_latex_header(
     main_font: str,
-    cjk_font: str,
+    cjk_fonts: dict[str, str],
+    main_cjk_key: str,
     mono_font: str,
     symbol_font: str,
     head_font: str = DEFAULT_HEAD_FONT,
     pdf_metadata: dict[str, str] | None = None,
 ) -> str:
     main_decl = _guard_font_set("setmainfont", [main_font])
-    cjk_decl = _guard_font_set("setCJKmainfont", [cjk_font])
+    cjk_families = "\n".join(
+        _guard_new_cjk_family(
+            _cjk_family_name(key), [cjk_fonts[key], CJK_DEFAULT_FONTS[key]]
+        )
+        for key in CJK_FONT_KEYS
+    )
+    cjk_decl = (
+        _guard_font_set("setCJKmainfont", [cjk_fonts[main_cjk_key]])
+        + "\n"
+        + cjk_families
+    )
     mono_decl = _guard_font_set("setmonofont", [mono_font])
     hypersetup = _make_hypersetup(pdf_metadata or {})
     running_header = _make_running_header(pdf_metadata or {})
@@ -773,9 +846,11 @@ def _make_latex_header(
     )
 
 
-def _write_lua_filter(path: str, cjk_font: str) -> None:
+def _write_lua_filter(path: str, cjk_fonts: dict[str, str], main_cjk_key: str) -> None:
+    ruby_font = cjk_fonts[main_cjk_key]
+    main_family = _cjk_family_name(main_cjk_key)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(_LUA_FILTER_CODE % cjk_font)
+        f.write(_LUA_FILTER_CODE % (ruby_font, main_family))
 
 
 # ---------------------------------------------------------------------------
@@ -789,14 +864,16 @@ def _pandoc_html_to_pdf(
     *,
     metadata: dict[str, str] | None = None,
     main_font: str,
-    cjk_font: str,
+    cjk_fonts: dict[str, str],
+    main_cjk_key: str,
     mono_font: str,
     symbol_font: str,
     head_font: str,
 ) -> None:
     header = _make_latex_header(
         main_font,
-        cjk_font,
+        cjk_fonts,
+        main_cjk_key,
         mono_font,
         symbol_font,
         head_font=head_font,
@@ -808,7 +885,7 @@ def _pandoc_html_to_pdf(
         header_path = f.name
         f.write(header)
 
-    _write_lua_filter(_FILTER_PATH, cjk_font)
+    _write_lua_filter(_FILTER_PATH, cjk_fonts, main_cjk_key)
 
     try:
         cmd = [
@@ -875,6 +952,7 @@ def convert(
     main_font: str | None = None,
     head_font: str | None = None,
     cjk_font: str | None = None,
+    cjk_fonts: dict[str, str] | None = None,
     mono_font: str | None = None,
     symbol_font: str | None = None,
 ) -> bytes | None:
@@ -885,11 +963,15 @@ def convert(
     )
 
     doc_lang = lang or _extract_lang(html_body)
-    effective_cjk = cjk_font or _default_cjk_font(doc_lang)
+    main_cjk_key = _cjk_key_for_lang(doc_lang)
+    fonts = dict(CJK_DEFAULT_FONTS)
+    fonts.update({k: v for k, v in (cjk_fonts or {}).items() if v})
+    if cjk_font:
+        fonts[main_cjk_key] = cjk_font
 
     main = _select_font(main_font or DEFAULT_MAIN_FONT, [])
     head = _select_font(head_font or DEFAULT_HEAD_FONT, [])
-    cjk = _select_font(effective_cjk, [])
+    cjk = {key: _select_font(fonts[key], []) for key in CJK_FONT_KEYS}
     mono = _select_font(mono_font or DEFAULT_MONO_FONT, [])
     symbol = _select_font(symbol_font or DEFAULT_SYMBOL_FONT, [])
 
@@ -908,7 +990,8 @@ def convert(
     kwargs = {
         "metadata": metadata,
         "main_font": main,
-        "cjk_font": cjk,
+        "cjk_fonts": cjk,
+        "main_cjk_key": main_cjk_key,
         "mono_font": mono,
         "symbol_font": symbol,
         "head_font": head,
@@ -938,6 +1021,7 @@ def convert_file(
     main_font: str | None = None,
     head_font: str | None = None,
     cjk_font: str | None = None,
+    cjk_fonts: dict[str, str] | None = None,
     mono_font: str | None = None,
     symbol_font: str | None = None,
 ) -> bytes | None:
@@ -952,6 +1036,7 @@ def convert_file(
         main_font=main_font,
         head_font=head_font,
         cjk_font=cjk_font,
+        cjk_fonts=cjk_fonts,
         mono_font=mono_font,
         symbol_font=symbol_font,
     )

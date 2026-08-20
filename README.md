@@ -27,6 +27,8 @@ All markdown2html5-base features are supported:
 - HTML comments (`[comment]: #`)
 - Backslash escaping
 
+Now you can change fonts for PDF output, including `CJK` fonts: see [Font Stacks Documentation](https://github.com/nobus-1967/fonts-stack-cjk/blob/main/Fonts.md) to choose right fonts.
+
 ## How it works
 
 You can compare conversion results: original [Markdown file](./test_page/Test_Page.md) → use markdown2html5-base for [HTML5 file](./test_page/Test_Page.html) → use markdown2pdf-base for [PDF file](./test_page/Test_Page.pdf).

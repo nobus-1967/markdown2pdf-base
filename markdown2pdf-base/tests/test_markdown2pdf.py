@@ -11,6 +11,7 @@ from markdown2pdf_base.converter import (
     DEFAULT_HEAD_FONT,
     DEFAULT_MAIN_FONT,
     DEFAULT_MONO_FONT,
+    _cjk_key_for_lang,
     _default_cjk_font,
     _extract_metadata,
     _font_available,
@@ -31,6 +32,7 @@ from markdown2pdf_base.converter import (
     _strip_metadata_tags,
     _strip_variation_selectors,
     _wrap_html,
+    _write_lua_filter,
     convert,
     convert_file,
 )
@@ -242,6 +244,18 @@ def test_default_cjk_font_by_lang():
     assert _default_cjk_font(None) == DEFAULT_CJK_JP_FONT
 
 
+def test_cjk_key_for_lang():
+    assert _cjk_key_for_lang("ja") == "ja"
+    assert _cjk_key_for_lang("zh-CN") == "cn"
+    assert _cjk_key_for_lang("zh-Hans") == "cn"
+    assert _cjk_key_for_lang("zh-TW") == "tw"
+    assert _cjk_key_for_lang("zh-Hant") == "tw"
+    assert _cjk_key_for_lang("zh-HK") == "hk"
+    assert _cjk_key_for_lang("zh-Hant-HK") == "hk"
+    assert _cjk_key_for_lang("ko") == "kr"
+    assert _cjk_key_for_lang("en") == "ja"
+
+
 def test_select_font_keeps_available_font():
     if not _font_available(DEFAULT_MAIN_FONT):
         pytest.skip("Noto Sans not installed")
@@ -249,15 +263,65 @@ def test_select_font_keeps_available_font():
 
 
 def test_make_latex_header_uses_head_font():
+    cjk_fonts = {
+        "ja": "Noto Sans CJK JP",
+        "cn": "Noto Sans CJK SC",
+        "tw": "Noto Sans CJK TC",
+        "hk": "Noto Sans CJK HK",
+        "kr": "Noto Sans CJK KR",
+    }
     header = _make_latex_header(
         "Noto Serif",
-        "Noto Sans CJK JP",
+        cjk_fonts,
+        "ja",
         "Noto Sans Mono",
         "Symbola",
         head_font=DEFAULT_HEAD_FONT,
     )
     assert r"\newfontfamily{\headfont}{Noto Sans}" in header
     assert r"\titleformat{\section}" in header
+
+
+def test_make_latex_header_declares_cjk_families():
+    cjk_fonts = {
+        "ja": "Custom JP",
+        "cn": "Custom SC",
+        "tw": "Custom TC",
+        "hk": "Custom HK",
+        "kr": "Custom KR",
+    }
+    header = _make_latex_header(
+        "Noto Serif",
+        cjk_fonts,
+        "tw",
+        "Noto Sans Mono",
+        "Symbola",
+        head_font=DEFAULT_HEAD_FONT,
+    )
+    assert r"\setCJKmainfont{Custom TC}" in header
+    assert r"\newCJKfontfamily{\cjkja}{Custom JP}" in header
+    assert r"\newCJKfontfamily{\cjkcn}{Custom SC}" in header
+    assert r"\newCJKfontfamily{\cjktw}{Custom TC}" in header
+    assert r"\newCJKfontfamily{\cjkhk}{Custom HK}" in header
+    assert r"\newCJKfontfamily{\cjkkr}{Custom KR}" in header
+
+
+def test_write_lua_filter_uses_cjk_fonts(tmp_path):
+    path = tmp_path / "filter.lua"
+    cjk_fonts = {
+        "ja": "Noto Serif CJK JP",
+        "cn": "Noto Serif CJK SC",
+        "tw": "Noto Serif CJK TC",
+        "hk": "Noto Serif CJK HK",
+        "kr": "Noto Serif CJK KR",
+    }
+    _write_lua_filter(str(path), cjk_fonts, "ja")
+    text = path.read_text(encoding="utf-8")
+    assert "local RUBY_CJK_FONT = 'Noto Serif CJK JP'" in text
+    assert "local MAIN_CJK = 'cjkja'" in text
+    assert "%s" not in text
+    assert "RUBY_CJK_FONT" in text
+    assert "MAIN_CJK" in text
 
 
 def test_select_font_falls_back_on_missing():

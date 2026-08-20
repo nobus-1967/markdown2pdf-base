@@ -3,6 +3,8 @@ import sys
 
 from markdown2pdf_base import __version__, convert, convert_file
 from markdown2pdf_base.converter import (
+    CJK_DEFAULT_FONTS,
+    CJK_FONT_KEYS,
     DEFAULT_CJK_JP_FONT,
     DEFAULT_HEAD_FONT,
     DEFAULT_MAIN_FONT,
@@ -40,8 +42,14 @@ def main() -> None:
     parser.add_argument(
         "--cjk-font",
         default=None,
-        help=f"CJK font name (default by language: {DEFAULT_CJK_JP_FONT})",
+        help=f"CJK font override for the document language (default by language: {DEFAULT_CJK_JP_FONT})",
     )
+    for key in CJK_FONT_KEYS:
+        parser.add_argument(
+            f"--cjk-{key}-font",
+            default=None,
+            help=(f"{key} CJK font name (default: {CJK_DEFAULT_FONTS[key]})"),
+        )
     parser.add_argument(
         "--mono-font",
         default=None,
@@ -68,6 +76,13 @@ def main() -> None:
         kwargs["head_font"] = args.head_font
     if args.cjk_font:
         kwargs["cjk_font"] = args.cjk_font
+    cjk_fonts = {}
+    for key in CJK_FONT_KEYS:
+        val = getattr(args, f"cjk_{key}_font")
+        if val:
+            cjk_fonts[key] = val
+    if cjk_fonts:
+        kwargs["cjk_fonts"] = cjk_fonts
     if args.mono_font:
         kwargs["mono_font"] = args.mono_font
     if args.symbol_font:
