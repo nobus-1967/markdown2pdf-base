@@ -2,14 +2,14 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.2.5 — feature-aligned with `markdown2html5-base` 0.2.6. Inline code is wrapped with `seqsplit` so long runs break across lines; heading code uses plain `\texttt` (seqsplit is unsafe in moving arguments).
+Version 0.3.0 — feature-aligned with `markdown2html5-base` 0.3.5. Inline code is rendered in plain black mono; long runs break across lines via `\allowbreak` insertion; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments).
 
 ## Requirements
 
-- `markdown2html5-base >= 0.2.6` (Python package)
+- `markdown2html5-base >= 0.3.5` (Python package)
 - `pandoc` with Lua filter support
-- `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `seqsplit`
-- Fonts (see [Fonts](#fonts)); run `fc-list`/`fc-match` from fontconfig for fallback detection
+- `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `titlesec`, `mdframed`, `longtable`, `colortbl`
+- Fonts (see [Fonts](#fonts)): `Noto Fonts` (`Noto Sans`, `Noto Serif`, `Noto Sans Mono`, `Noto Serif CJK JP/SC/TC/HK/KR`) and `Symbola`; run `fc-list`/`fc-match` from `fontconfig` to verify availability
 
 ## CLI Usage
 
@@ -25,19 +25,21 @@ cat input.md | markdown2pdf-base > output.pdf
 
 # Custom fonts and document language
 markdown2pdf-base input.md -o output.pdf \
-  --lang ja --main-font "Noto Sans" --cjk-font "Noto Sans CJK JP" \
-  --mono-font "Noto Sans Mono" --symbol-font "Symbola"
+  --lang ja --main-font "Noto Serif" --head-font "Noto Sans" \
+  --cjk-font "Noto Serif CJK JP" --mono-font "Noto Sans Mono" \
+  --symbol-font "Symbola"
 ```
 
 ### Options
 
-| Option           | Description                                          | Default           |
-| ---------------- | ---------------------------------------------------- | ----------------- |
-| `--lang`         | Document language (BCP 47, e.g. `ja`, `zh-CN`)       | from front matter |
-| `--main-font`    | Main text font                                       | `Noto Sans`       |
-| `--cjk-font`     | CJK font (overrides language-based default)          | by language       |
-| `--mono-font`    | Monospace font                                       | `Noto Sans Mono`  |
-| `--symbol-font`  | Symbol/emoji font                                    | `Symbola`         |
+| Option           | Description                                          | Default            |
+| ---------------- | ---------------------------------------------------- | ------------------ |
+| `--lang`         | Document language (BCP 47, e.g. `ja`, `zh-CN`)       | from front matter  |
+| `--main-font`    | Main text font                                       | `Noto Serif`       |
+| `--head-font`    | Heading font                                         | `Noto Sans`        |
+| `--cjk-font`     | CJK font (overrides language-based default)          | by language        |
+| `--mono-font`    | Monospace font                                       | `Noto Sans Mono`   |
+| `--symbol-font`  | Symbol/emoji font                                    | `Symbola`          |
 
 ## Python API
 
@@ -47,11 +49,12 @@ from markdown2pdf_base import convert, convert_file
 convert_file("input.md", "output.pdf")  # write to file
 data = convert("# Hello", None)  # returns PDF bytes
 data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
+data = convert("# Hi", None, main_font="Noto Serif", head_font="Noto Sans")
 ```
 
 ## Features
 
-All `markdown2html5-base` 0.2.6 operations are supported:
+All `markdown2html5-base` 0.3.5 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline (now `<u>` tag instead of `<ins>`)
@@ -90,49 +93,43 @@ published: 2026-08-09
 Body text.
 ```
 
-Recognized keys: `lang`, `title`, `author`, `description`, `keywords`, `published`. Front matter values are used only for PDF metadata (Title,
+Recognized keys: `lang`, `title`, `author`, `description`, `keywords`, `published` (with `date` accepted as an alias for `published`). Front matter values are used only for PDF metadata (Title,
 Author, Subject, Keywords via `\hypersetup`) and for CJK font selection via `lang` — they never appear as text in the PDF body. `lang` selects the default CJK font (see below).
 
 ## Fonts
 
-Default fonts, per document language:
+Default fonts:
 
 | Role   | Default font          |
 | ------ | --------------------- |
-| Main   | `Noto Sans`           |
+| Main   | `Noto Serif`          |
+| Head   | `Noto Sans`           |
 | Mono   | `Noto Sans Mono`      |
-| CJK    | `Noto Sans CJK JP`    |
-| CJK    | `Noto Sans CJK SC`    |
-| CJK    | `Noto Sans CJK TC`    |
+| CJK    | `Noto Serif CJK JP`   |
+| CJK    | `Noto Serif CJK SC`   |
+| CJK    | `Noto Serif CJK TC`   |
+| CJK    | `Noto Serif CJK HK`   |
+| CJK    | `Noto Serif CJK KR`   |
 | Symbol | `Symbola`             |
+
+Headings (H1–H6) are typeset in the heading font (`\newfontfamily{\headfont}` + `titlesec`); body text uses the main font.
 
 CJK font selection by `lang`:
 
-- `ja` / `ja-*` → `Noto Sans CJK JP`
-- `zh` / `zh-Hans` / `zh-CN` → `Noto Sans CJK SC`
-- `zh-Hant` / `zh-TW` / `zh-HK` → `Noto Sans CJK TC`
+- `ja` / `ja-*` → `Noto Serif CJK JP`
+- `ko` / `ko-*` → `Noto Serif CJK KR`
+- `zh` / `zh-Hans` / `zh-CN` → `Noto Serif CJK SC`
+- `zh-Hant` / `zh-TW` / `zh-MO` → `Noto Serif CJK TC`
+- `zh-HK` / `zh-Hant-HK` → `Noto Serif CJK HK`
 
-### Substitution fallbacks
-
-When a default font is not installed, `markdown2pdf-base` detects availability
-via `fc-list` and substitutes the first installed font, emitting a warning:
-
-| Role   | Fallback chain                                                     |
-| ------ | ------------------------------------------------------------------ |
-| Main   | Noto Sans → DejaVu Sans → Liberation Sans → FreeSans               |
-| Mono   | Noto Sans Mono → DejaVu Sans Mono → Liberation Mono → FreeMono     |
-| CJK JP | Noto Sans CJK JP → Source Han Sans JP → Sarasa Gothic → IPAPGothic |
-| CJK SC | Noto Sans CJK SC → Source Han Sans SC → Sarasa Gothic SC → I.Ming  |
-| CJK TC | Noto Sans CJK TC → Source Han Sans TC → Sarasa Gothic TC → I.Ming  |
-| Symbol | Symbola → Noto Sans Symbols → DejaVu Sans                          |
-
-The generated LaTeX header additionally guards every font declaration with `\IfFontExistsTF` as a final safety net.
+The symbol font declaration in the generated LaTeX header is guarded with `\IfFontExistsTF` and falls back to `Symbola` when the requested font cannot be loaded by XeLaTeX (e.g. color fonts).
 
 ## Notes
 
 - Emoji and symbols are detected by Unicode block (including Mathematical Operators) in the Lua filter and rendered through the symbol font, so adjacent text always stays in the main font (no `ucharclasses` font leaking).
 - Ruby annotations are converted to LaTeX `\ruby{}{}` via a Lua filter.
 - Footnotes render as a superscript link plus a footnotes list at the end.
-- Inline code is printed in the mono font colored mid-gray (`RGB(90,90,90)`). Long runs that would overflow a line are wrapped with `seqsplit` (it breaks anywhere, without hyphens) via the `\seqcode` macro; short runs and any code inside headings use plain `\texttt` — `seqsplit` is unsafe in moving arguments such as bookmarks and the table of contents.
-- Fenced code blocks are typeset in the mono font inside a light gray frame (`RGB(180,180,180)`) via an `fvextra` `verbatim` override with line breaking enabled (`breaklines`); wrapped lines show no break symbol.
-- The running header (`title (author: published)`) in the top margin is colored mid-gray (`RGB(90,90,90)`).
+- Inline code is printed in plain black mono (`\texttt`). `\allowbreak` (a penalty node, unaffected by `\hyphenpenalty`) is inserted after every token, so long runs wrap anywhere instead of overflowing table cells and paragraph lines. Code inside headings uses plain `\texttt` (no breaks) — macros and break commands are unsafe in moving arguments such as bookmarks and the table of contents.
+- Fenced code blocks are typeset in black on a light gray (`RGB(245,245,245)`) background inside a black frame via an `fvextra` `verbatim` override with line breaking enabled (`breaklines`); wrapped lines show no break symbol.
+- Fenced code blocks with a language tag (`python`) show a `/language/` label in white on a full-width black bar attached to the top of the frame, rendered in the mono font.
+- The running header (`title (author: published)`) in the top margin is rendered in black; `published` can be supplied as YAML front matter `date:` or `published:`.

@@ -4,9 +4,9 @@ title: Test Page
 author: nobus-1967
 description: Test Page for markdown2html5-base converter.
 keywords: markdown, html5
-published: 2026-08-10
+published: 2026-08-18
 ---
-[Test Page, created for markdown2html5-base converter (ver. 0.2.3).]: # 
+[Test Page, created for markdown2html5-base converter (ver. 0.3.4).]: #
 # Heading 1
 ## Heading 2
 ### Heading 3
@@ -14,13 +14,13 @@ published: 2026-08-10
 ###### Heading 6: Formatting the text
 
 
-This is a paragraph. Any text may be **bold**, *italic*, ^^underlined^^, ~~strikethrough (deleted)~~. 
+This is a paragraph. Any text may be **bold**, *italic*, ^^underlined^^, ~~strikethrough (deleted)~~.
 
-The text may also be ==marked (highlighted)==. And this is `an inline code` inside a regular paragraph.
+The text may also be ==marked (highlighted)==. And this is `a piece of something looks like an inline code` inside a regular paragraph.
 
 You can use superscript (X^2^) or subscript (H~2~O) symbols.
 
-And you can add hyperlinks like [Markdown Guide](https://www.markdownguide.org/), footnotes[^1] \(LINE BREAK)  
+And you can add hyperlinks like [Markdown Guide](https://www.markdownguide.org/), footnotes[^1] (LINE BREAK) \
 and date/time.[^2]
 
 See also [other add-ons](#others).
@@ -44,12 +44,17 @@ Definition list:
 {:de} Frau
   : weiblicher erwachsener Mensch; Ehefrau
 
-> This is a citation (blockquote). 
+> This is a citation (blockquote).
 
-And code block looks like:
+And code block looks like with a code language definition:
 
-```python3
+```python
 print("Hello, World!")
+```
+and without it:
+
+```
+Some text.
 ```
 
 | Product  | Qty | Price |

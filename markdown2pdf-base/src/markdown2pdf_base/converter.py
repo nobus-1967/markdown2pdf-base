@@ -9,53 +9,15 @@ import warnings
 
 from markdown2html5_base import MarkdownToHTML
 
-DEFAULT_MAIN_FONT = "Noto Sans"
+DEFAULT_MAIN_FONT = "Noto Serif"
+DEFAULT_HEAD_FONT = "Noto Sans"
 DEFAULT_MONO_FONT = "Noto Sans Mono"
-DEFAULT_CJK_JP_FONT = "Noto Sans CJK JP"
-DEFAULT_CJK_SC_FONT = "Noto Sans CJK SC"
-DEFAULT_CJK_TC_FONT = "Noto Sans CJK TC"
+DEFAULT_CJK_JP_FONT = "Noto Serif CJK JP"
+DEFAULT_CJK_ZH_CN_FONT = "Noto Serif CJK SC"
+DEFAULT_CJK_ZH_TW_FONT = "Noto Serif CJK TC"
+DEFAULT_CJK_ZH_HK_FONT = "Noto Serif CJK HK"
+DEFAULT_CJK_KR_FONT = "Noto Serif CJK KR"
 DEFAULT_SYMBOL_FONT = "Symbola"
-
-MAIN_FONT_FALLBACKS = [
-    "Noto Sans",
-    "DejaVu Sans",
-    "Liberation Sans",
-    "FreeSans",
-]
-
-MONO_FONT_FALLBACKS = [
-    "Noto Sans Mono",
-    "DejaVu Sans Mono",
-    "Liberation Mono",
-    "FreeMono",
-]
-
-CJK_JP_FALLBACKS = [
-    "Noto Sans CJK JP",
-    "Source Han Sans JP",
-    "Sarasa Gothic",
-    "IPAPGothic",
-]
-
-CJK_SC_FALLBACKS = [
-    "Noto Sans CJK SC",
-    "Source Han Sans SC",
-    "Sarasa Gothic SC",
-    "I.Ming",
-]
-
-CJK_TC_FALLBACKS = [
-    "Noto Sans CJK TC",
-    "Source Han Sans TC",
-    "Sarasa Gothic TC",
-    "I.Ming",
-]
-
-SYMBOL_FONT_FALLBACKS = [
-    "Symbola",
-    "Noto Sans Symbols",
-    "DejaVu Sans",
-]
 
 _CSS = """\
   body {{ font-family: "{main}", sans-serif; font-size: 11pt; line-height: 1.6; max-width: 42em; margin: 2em auto; padding: 0 1em; }}
@@ -63,6 +25,7 @@ _CSS = """\
   pre {{ background: #f5f5f5; padding: 0.8em; border-radius: 4px; overflow-x: auto; }}
   code {{ background: #f0f0f0; padding: 0.15em 0.3em; border-radius: 3px; }}
   pre code {{ background: none; padding: 0; }}
+  div.code-lang {{ font-family: "{mono}", monospace; font-size: 9pt; color: #666; margin: 0; padding: 0.2em 0; }}
   table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
   th, td {{ border: 1px solid #ccc; padding: 0.4em 0.6em; text-align: left; }}
   th {{ background: #eee; }}
@@ -91,34 +54,81 @@ _LATEX_PREAMBLE = r"""\usepackage[margin=25.4mm]{geometry}
 \usepackage{ruby}
 \usepackage{framed}
 \usepackage{fvextra}
-\usepackage{seqsplit}
+\usepackage{titlesec}
+\usepackage{mdframed}
+\usepackage{colortbl}
+\usepackage{longtable}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{\fill}
+\usepackage{array}
+\renewcommand{\arraystretch}{1.5}
+\usepackage{xltabular}
+\usepackage{ragged2e}
+\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{C}{>{\Centering\arraybackslash}X}
+\newcolumntype{R}{>{\RaggedLeft\arraybackslash}X}
 \definecolor{shadecolor}{RGB}{245,245,245}
-\definecolor{codeframe}{RGB}{180,180,180}
-\definecolor{codeinline}{RGB}{90,90,90}
-\definecolor{headgray}{RGB}{90,90,90}
+\mdfdefinestyle{codelangbox}{%%
+  linecolor=black, linewidth=0.6pt,
+  frametitlefont=\small\bfseries\ttfamily\color{white},
+  frametitlebackgroundcolor=black,
+  backgroundcolor=shadecolor,
+  innertopmargin=4pt, innerbottommargin=4pt,
+  innerleftmargin=6pt, innerrightmargin=6pt,
+  skipabove=6pt, skipbelow=6pt,
+}
 \makeatletter
 \newenvironment{ShadedVerbatim}{%%
   \VerbatimEnvironment
-  \begin{minipage}[t]{\linewidth}%%
-  \begin{Verbatim}[frame=single, rulecolor=\color{codeframe}, breaklines, breaksymbolleft={}]%%
+  \begin{mdframed}[style=codelangbox]\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]%%
 }{%%
-  \end{Verbatim}%%
-  \end{minipage}%%
+  \end{Verbatim}\end{mdframed}%%
 }
 \let\verbatim\ShadedVerbatim
 \let\endverbatim\endShadedVerbatim
 \makeatother
+\renewenvironment{quote}{%%
+  \begin{mdframed}[leftline=true, rightline=false, topline=false, bottomline=false,
+    linecolor=shadecolor, linewidth=10pt,
+    innerleftmargin=20pt, innerrightmargin=0pt,
+    innertopmargin=4pt, innerbottommargin=4pt,
+    leftmargin=0pt, rightmargin=0pt, skipabove=6pt, skipbelow=6pt]
+}{%%
+  \end{mdframed}%%
+}
 \emergencystretch=1.5em
-\let\oldtexttt\texttt
-\renewcommand{\texttt}[1]{\oldtexttt{\textcolor{codeinline}{#1}}}
-\newcommand{\seqcode}[1]{\oldtexttt{\textcolor{codeinline}{\seqsplit{#1}}}}
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\usepackage{soul}
+\sethlcolor{shadecolor}
+\soulregister{\textless}{1}
+\soulregister{\textgreater}{1}
+\soulregister{\textbackslash}{1}
+\soulregister{\textasciitilde}{1}
+\soulregister{\textasciicircum}{1}
+\soulregister{\slash}{0}
+\soulregister{\allowbreak}{0}
+\newcommand{\markhl}[1]{\sethlcolor{yellow}\hl{#1}\sethlcolor{shadecolor}}
 \renewcommand{\rubysep}{0.3ex}
 \newunicodechar{^^^^2026}{\ldots}
 \newunicodechar{^^^^22ef}{\ldots}
 %s
 %s
 %s
-\newfontfamily{\symbolfont}{%s}
+\newfontfamily{\headfont}{%s}
+\titleformat{\section}{\Large\bfseries\headfont}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\headfont}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\headfont}{\thesubsubsection}{1em}{}
+\titleformat{\paragraph}{\normalsize\bfseries\headfont}{\theparagraph}{1em}{}
+\titleformat{\subparagraph}{\normalsize\bfseries\headfont}{\thesubparagraph}{1em}{}
+\newcommand{\useSymbolFont}[1]{%%
+  \IfFontExistsTF{#1}{%%
+    \newfontfamily{\symbolfont}{#1}%%
+  }{%%
+    \newfontfamily{\symbolfont}{Symbola}%%
+  }%%
+}
+\useSymbolFont{%s}
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[C]{%s}
@@ -184,7 +194,7 @@ def _make_running_header(metadata: dict[str, str]) -> str:
         suffix.append(_latex_escape(published))
     if suffix:
         parts.append("(" + ": ".join(suffix) + ")")
-    return r"\textcolor{headgray}{" + " ".join(parts) + "}"
+    return " ".join(parts)
 
 
 def _guard_font_set(set_command: str, chain: list[str]) -> str:
@@ -263,8 +273,8 @@ local code_escapes = {
   ['%%'] = '\\\\%%',
   ['^'] = '\\\\textasciicircum{}',
   ['~'] = '\\\\textasciitilde{}',
-  ['<'] = '\\\\textless{}',
-  ['>'] = '\\\\textgreater{}',
+  ['<'] = '<',
+  ['>'] = '>',
 }
 
 local function latex_escape_code(text)
@@ -281,26 +291,226 @@ local hdr_walker = {
       '\\\\texttt{' .. latex_escape_code(el.text) .. '}')
   end,
 }
-local function code_emit(el)
-  local escaped = latex_escape_code(el.text)
-  -- seqsplit breaks on empty/whitespace/edge braces; only use it for
-  -- substantive runs that can actually overflow a line.
-  local raw = el.text
-  if escaped == '' or raw:match('^%%s+$') or raw:match('^%%s') or raw:match('%%s$')
-     or #raw < 40 then
-    return pandoc.RawInline('latex', '\\\\texttt{' .. escaped .. '}')
+local function breakable_code(escaped)
+  -- Insert \allowbreak (a penalty node, unaffected by \\hyphenpenalty) after
+  -- every token so TeX can break long code runs anywhere instead of
+  -- overflowing the line. Tokens are single characters, \\macro or
+  -- \\macro{} groups, and multibyte (CJK) characters.
+  local out = {}
+  local i = 1
+  while i <= #escaped do
+    local tok
+    local c = escaped:sub(i, i)
+    if c == '\\\\' then
+      local j = i + 1
+      local ch = escaped:sub(j, j)
+      if ch:match('[a-zA-Z]') then
+        local k = j
+        while escaped:sub(k, k):match('[a-zA-Z]') do k = k + 1 end
+        tok = escaped:sub(i, k - 1)
+        local rest = escaped:sub(k)
+        if rest:sub(1, 1) == '{' then
+          local close = rest:find('}', 2)
+          tok = tok .. rest:sub(1, close)
+        end
+      else
+        tok = escaped:sub(i, i + 1)
+      end
+    else
+      local nb = 1
+      local b = escaped:byte(i)
+      if b >= 240 then nb = 4 elseif b >= 224 then nb = 3 elseif b >= 192 then nb = 2 end
+      tok = escaped:sub(i, i + nb - 1)
+    end
+    out[#out + 1] = tok
+    out[#out + 1] = '\\\\allowbreak{}'
+    i = i + #tok
   end
-  return pandoc.RawInline('latex', '\\\\seqcode{' .. escaped .. '}')
+  return table.concat(out)
+end
+
+local function code_latex(el)
+  local escaped = latex_escape_code(el.text)
+  -- All inline code renders as breakable plain monospace text with no
+  -- background. \allowbreak (a penalty node) is inserted after every token
+  -- so long runs wrap anywhere instead of overflowing tables and paragraphs.
+  return '\\\\texttt{' .. breakable_code(escaped) .. '}'
+end
+local function code_emit(el)
+  return pandoc.RawInline('latex', code_latex(el))
 end
 local body_walker = {
   Code = code_emit,
+  HorizontalRule = function()
+    return pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{0.4pt}')
+  end,
+  Mark = function(el)
+    return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
+  end,
 }
+
+local function has_class(el, name)
+  for _, c in ipairs(el.classes) do
+    if c == name then return true end
+  end
+  return false
+end
+
+local function latex_escape_text(s)
+  s = s:gsub('\\\\', '\\\\textbackslash{}')
+  s = s:gsub('([{}$&#_%%%%])', '\\\\%%1')
+  s = s:gsub('~', '\\\\textasciitilde{}')
+  s = s:gsub('%%^', '\\\\textasciicircum{}')
+  return s
+end
+
+local function inline_latex(inl)
+  if inl.t == 'Str' then return latex_escape_text(inl.text) end
+  if inl.t == 'RawInline' then return inl.text end
+  if inl.t == 'Code' then return code_latex(inl) end
+  if inl.t == 'Space' or inl.t == 'SoftBreak' then return ' ' end
+  if inl.t == 'Strong' then
+    return '\\\\textbf{' .. serialize_inlines(inl.content) .. '}'
+  end
+  if inl.t == 'Emph' then
+    return '\\\\emph{' .. serialize_inlines(inl.content) .. '}'
+  end
+  if inl.t == 'Mark' then
+    return '\\\\markhl{' .. serialize_inlines(inl.content) .. '}'
+  end
+  if inl.t == 'Link' then
+    return '\\\\href{' .. inl.target .. '}{' .. serialize_inlines(inl.content) .. '}'
+  end
+  return pandoc.utils.stringify(inl)
+end
+
+local function serialize_inlines(inlines)
+  local out = {}
+  for _, inl in ipairs(inlines) do
+    out[#out + 1] = inline_latex(inl)
+  end
+  return table.concat(out)
+end
+
+local function cell_latex(cell)
+  local out = {}
+  for _, blk in ipairs(cell.contents) do
+    if blk.t == 'Para' or blk.t == 'Plain' then
+      out[#out + 1] = serialize_inlines(blk.content)
+    else
+      out[#out + 1] = pandoc.utils.stringify(blk)
+    end
+  end
+  return table.concat(out, ' ')
+end
+
+local function row_latex(row, pre, post)
+  local cells = {}
+  for _, cell in ipairs(row.cells) do
+    local body = cell_latex(cell)
+    if pre then body = pre .. body .. post end
+    cells[#cells + 1] = body
+  end
+  return table.concat(cells, ' & ') .. ' \\\\\\\\'
+end
+
+local function inlines_need_wrap(inlines)
+  for _, inl in ipairs(inlines) do
+    if inl.t == 'Code' and #inl.text >= 40 then return true end
+    if inl.t == 'Str' and #inl.text >= 40 then return true end
+    if inl.t == 'Link' and #inl.target >= 60 then return true end
+    if (inl.t == 'Strong' or inl.t == 'Emph') and inlines_need_wrap(inl.content) then
+      return true
+    end
+  end
+  return false
+end
+
+local function cell_needs_wrap(cell)
+  for _, blk in ipairs(cell.contents) do
+    if blk.t == 'Para' or blk.t == 'Plain' then
+      if inlines_need_wrap(blk.content) then return true end
+    end
+  end
+  return false
+end
+
+local function table_latex(tbl)
+  local ncols = #tbl.colspecs
+  local wrap = {}
+  for i = 1, ncols do wrap[i] = false end
+  local function scan_rows(rows)
+    for _, row in ipairs(rows) do
+      for ci, cell in ipairs(row.cells) do
+        if cell_needs_wrap(cell) then wrap[ci] = true end
+      end
+    end
+  end
+  if tbl.head then scan_rows(tbl.head.rows) end
+  if tbl.foot then scan_rows(tbl.foot.rows) end
+  for _, b in ipairs(tbl.bodies) do scan_rows(b.body) end
+
+  local spec = {}
+  local any_x = false
+  for i, cs in ipairs(tbl.colspecs) do
+    local a = cs[1]
+    if wrap[i] then
+      any_x = true
+      local xc = (a == 'AlignCenter') and 'C' or ((a == 'AlignRight') and 'R' or 'L')
+      spec[#spec + 1] = '|' .. xc
+    else
+      local achar = (a == 'AlignCenter') and 'c' or ((a == 'AlignRight') and 'r' or 'l')
+      spec[#spec + 1] = '|' .. achar
+    end
+  end
+  spec[#spec + 1] = '|'
+  local colspec = table.concat(spec)
+  local begin = any_x
+    and '\\\\begin{xltabular}{\\\\linewidth}{' .. colspec .. '}'
+    or ('\\\\begin{longtable}{' .. colspec .. '}')
+  local out = { begin }
+  local head_rows = tbl.head and tbl.head.rows or {}
+  local foot_rows = tbl.foot and tbl.foot.rows or {}
+  if #head_rows > 0 then
+    for i, row in ipairs(head_rows) do
+      local pre = (i == 1) and '\\\\hline\\\\rowcolor{black}' or ''
+      out[#out + 1] = pre .. row_latex(row, '\\\\textcolor{white}{\\\\bfseries ', '}')
+    end
+    out[#out + 1] = '\\\\hline\\\\endhead'
+  end
+  if #foot_rows > 0 then
+    for _, row in ipairs(foot_rows) do
+      out[#out + 1] = '\\\\hline\\\\rowcolor{shadecolor}' .. row_latex(row, '\\\\textit{', '}')
+    end
+    out[#out + 1] = '\\\\hline\\\\endlastfoot'
+  end
+  for _, b in ipairs(tbl.bodies) do
+    for _, row in ipairs(b.body) do
+      out[#out + 1] = '\\\\hline ' .. row_latex(row, nil)
+    end
+  end
+  if #foot_rows == 0 and #out > 0 then
+    out[#out] = out[#out] .. '\\\\hline'
+  end
+  out[#out + 1] = any_x and '\\\\end{xltabular}' or '\\\\end{longtable}'
+  return table.concat(out, '\\n')
+end
+
+local function render_code_lang_block(label, code)
+  return '\\\\begin{mdframed}[style=codelangbox, frametitle={' .. label .. '}]\\n'
+    .. '\\\\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]\\n'
+    .. code .. '\\n'
+    .. '\\\\end{Verbatim}\\n'
+    .. '\\\\end{mdframed}'
+end
 
 function Pandoc(doc)
   local out = pandoc.List()
-  for _, b in ipairs(doc.blocks) do
+  local i = 1
+  while i <= #doc.blocks do
+    local b = doc.blocks[i]
     if b.t == 'Header' then
-      -- Plain texttt: seqsplit is unsafe in moving arguments (bookmarks/toc)
+      -- Plain texttt: no \allowbreak or macros unsafe in moving args (toc/bookmarks)
       local cc = pandoc.List()
       for _, inl in ipairs(b.content) do
         local res = pandoc.walk_inline(inl, hdr_walker)
@@ -312,8 +522,29 @@ function Pandoc(doc)
       end
       b.content = cc
       out:insert(b)
+      i = i + 1
     else
-      out:insert(pandoc.walk_block(b, body_walker))
+      local nb = doc.blocks[i + 1]
+      if b.t == 'Div' and has_class(b, 'code-lang') then
+        local label = pandoc.utils.stringify(b.content)
+        if nb and nb.t == 'CodeBlock' then
+          out:insert(pandoc.RawBlock('latex', render_code_lang_block(label, nb.text)))
+          i = i + 2
+        else
+          out:insert(pandoc.RawBlock('latex',
+            '\\\\noindent{\\\\small\\\\texttt{' .. label .. '}}\\\\par'))
+          i = i + 1
+        end
+      elseif b.t == 'Table' then
+        out:insert(pandoc.RawBlock('latex', table_latex(b)))
+        i = i + 1
+      elseif b.t == 'HorizontalRule' then
+        out:insert(pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{0.4pt}'))
+        i = i + 1
+      else
+        out:insert(pandoc.walk_block(b, body_walker))
+        i = i + 1
+      end
     end
   end
   doc.blocks = out
@@ -327,6 +558,11 @@ function Span(el)
     local base = pandoc.utils.stringify(el.content)
     local cjk = '%s'
     return pandoc.RawInline('latex', '{\\\\CJKfontspec{' .. cjk .. '}\\\\ruby{' .. base .. '}{' .. rt .. '}}')
+  end
+  for _, c in ipairs(el.classes) do
+    if c == 'mark' then
+      return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
+    end
   end
 end
 """
@@ -377,23 +613,19 @@ def _select_font(family: str, fallbacks: list[str]) -> str:
 
 
 def _is_traditional_chinese(lang: str | None) -> bool:
-    return (lang or "").lower().startswith(("zh-hant", "zh-tw", "zh-hk", "zh-mo"))
-
-
-def _cjk_fallback_chain(lang: str | None) -> list[str]:
-    lang = (lang or "").lower()
-    if lang.startswith("zh"):
-        return CJK_TC_FALLBACKS if _is_traditional_chinese(lang) else CJK_SC_FALLBACKS
-    return CJK_JP_FALLBACKS
+    return (lang or "").lower().startswith(("zh-hant", "zh-tw", "zh-mo"))
 
 
 def _default_cjk_font(lang: str | None) -> str:
-    if (lang or "").lower().startswith("zh"):
-        return (
-            DEFAULT_CJK_TC_FONT
-            if _is_traditional_chinese(lang)
-            else DEFAULT_CJK_SC_FONT
-        )
+    lang = (lang or "").lower()
+    if lang.startswith("zh"):
+        if lang in ("zh-hk", "zh-hant-hk"):
+            return DEFAULT_CJK_ZH_HK_FONT
+        if _is_traditional_chinese(lang):
+            return DEFAULT_CJK_ZH_TW_FONT
+        return DEFAULT_CJK_ZH_CN_FONT
+    if lang.startswith("ko"):
+        return DEFAULT_CJK_KR_FONT
     return DEFAULT_CJK_JP_FONT
 
 
@@ -410,7 +642,7 @@ def _resolve_image_src(html: str, source_dir: str) -> str:
         resolved = os.path.normpath(os.path.join(source_dir, src))
         return m.group(0).replace(f'src="{src}"', f'src="{resolved}"')
 
-    return re.sub(r'src="([^"]+)"', _abs, html)
+    return re.sub(r'<img\b[^>]*?\bsrc="([^"]+)"', _abs, html)
 
 
 def _strip_footnote_backref(html: str) -> str:
@@ -522,20 +754,19 @@ def _make_latex_header(
     cjk_font: str,
     mono_font: str,
     symbol_font: str,
-    main_chain: list[str] | None = None,
-    cjk_chain: list[str] | None = None,
-    mono_chain: list[str] | None = None,
+    head_font: str = DEFAULT_HEAD_FONT,
     pdf_metadata: dict[str, str] | None = None,
 ) -> str:
-    main_decl = _guard_font_set("setmainfont", main_chain or [main_font])
-    cjk_decl = _guard_font_set("setCJKmainfont", cjk_chain or [cjk_font])
-    mono_decl = _guard_font_set("setmonofont", mono_chain or [mono_font])
+    main_decl = _guard_font_set("setmainfont", [main_font])
+    cjk_decl = _guard_font_set("setCJKmainfont", [cjk_font])
+    mono_decl = _guard_font_set("setmonofont", [mono_font])
     hypersetup = _make_hypersetup(pdf_metadata or {})
     running_header = _make_running_header(pdf_metadata or {})
     return _LATEX_PREAMBLE % (
         main_decl,
         cjk_decl,
         mono_decl,
+        head_font,
         symbol_font,
         running_header,
         hypersetup,
@@ -561,18 +792,14 @@ def _pandoc_html_to_pdf(
     cjk_font: str,
     mono_font: str,
     symbol_font: str,
-    main_chain: list[str],
-    cjk_chain: list[str],
-    mono_chain: list[str],
+    head_font: str,
 ) -> None:
     header = _make_latex_header(
         main_font,
         cjk_font,
         mono_font,
         symbol_font,
-        main_chain=main_chain,
-        cjk_chain=cjk_chain,
-        mono_chain=mono_chain,
+        head_font=head_font,
         pdf_metadata=metadata,
     )
     with tempfile.NamedTemporaryFile(
@@ -646,6 +873,7 @@ def convert(
     source_dir: str | None = None,
     lang: str | None = None,
     main_font: str | None = None,
+    head_font: str | None = None,
     cjk_font: str | None = None,
     mono_font: str | None = None,
     symbol_font: str | None = None,
@@ -658,12 +886,12 @@ def convert(
 
     doc_lang = lang or _extract_lang(html_body)
     effective_cjk = cjk_font or _default_cjk_font(doc_lang)
-    cjk_chain = _cjk_fallback_chain(doc_lang)
 
-    main = _select_font(main_font or DEFAULT_MAIN_FONT, MAIN_FONT_FALLBACKS)
-    cjk = _select_font(effective_cjk, cjk_chain)
-    mono = _select_font(mono_font or DEFAULT_MONO_FONT, MONO_FONT_FALLBACKS)
-    symbol = _select_font(symbol_font or DEFAULT_SYMBOL_FONT, SYMBOL_FONT_FALLBACKS)
+    main = _select_font(main_font or DEFAULT_MAIN_FONT, [])
+    head = _select_font(head_font or DEFAULT_HEAD_FONT, [])
+    cjk = _select_font(effective_cjk, [])
+    mono = _select_font(mono_font or DEFAULT_MONO_FONT, [])
+    symbol = _select_font(symbol_font or DEFAULT_SYMBOL_FONT, [])
 
     full_html, metadata = _process_html(
         html_body, source_dir, doc_lang or "en", main, mono
@@ -683,9 +911,7 @@ def convert(
         "cjk_font": cjk,
         "mono_font": mono,
         "symbol_font": symbol,
-        "main_chain": [main, *MAIN_FONT_FALLBACKS],
-        "cjk_chain": [cjk, *cjk_chain],
-        "mono_chain": [mono, *MONO_FONT_FALLBACKS],
+        "head_font": head,
     }
 
     try:
@@ -710,6 +936,7 @@ def convert_file(
     *,
     lang: str | None = None,
     main_font: str | None = None,
+    head_font: str | None = None,
     cjk_font: str | None = None,
     mono_font: str | None = None,
     symbol_font: str | None = None,
@@ -723,6 +950,7 @@ def convert_file(
         source_dir=source_dir,
         lang=lang,
         main_font=main_font,
+        head_font=head_font,
         cjk_font=cjk_font,
         mono_font=mono_font,
         symbol_font=symbol_font,

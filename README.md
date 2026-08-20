@@ -2,6 +2,8 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
+The generated PDF file matches the HTML5 document with the built-in styles (used in markdown2html5-base), so the pandoc output was overridden in many cases.
+
 ## Features
 
 All markdown2html5-base features are supported:
@@ -36,4 +38,4 @@ You can also evaluate the results using CLI: `markdown2pdf-base input.md -o outp
 - `markdown2html5-base >= 0.2.6`;
 - `pandoc` with Lua filter support;
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fancyvrb`, `framed`;
-- fonts (see [README](./markdown2pdf-base/README.md) for details).
+- `Noto` and `Symbola` fonts (see [README](./markdown2pdf-base/README.md) for details).

@@ -4,11 +4,13 @@ import pytest
 
 from markdown2pdf_base.converter import (
     DEFAULT_CJK_JP_FONT,
-    DEFAULT_CJK_SC_FONT,
-    DEFAULT_CJK_TC_FONT,
+    DEFAULT_CJK_KR_FONT,
+    DEFAULT_CJK_ZH_CN_FONT,
+    DEFAULT_CJK_ZH_HK_FONT,
+    DEFAULT_CJK_ZH_TW_FONT,
+    DEFAULT_HEAD_FONT,
     DEFAULT_MAIN_FONT,
     DEFAULT_MONO_FONT,
-    _cjk_fallback_chain,
     _default_cjk_font,
     _extract_metadata,
     _font_available,
@@ -17,6 +19,7 @@ from markdown2pdf_base.converter import (
     _is_full_document,
     _latex_escape,
     _make_hypersetup,
+    _make_latex_header,
     _make_running_header,
     _normalize_quotes,
     _process_html,
@@ -111,20 +114,15 @@ def test_make_running_header():
         _make_running_header(
             {"title": "Doc", "author": "Ada", "published": "2026-08-09"}
         )
-        == "\\textcolor{headgray}{\\textbf{Doc} (\\textit{Ada}: 2026-08-09)}"
+        == "\\textbf{Doc} (\\textit{Ada}: 2026-08-09)"
     )
     assert (
         _make_running_header({"title": "Doc", "author": "Ada"})
-        == "\\textcolor{headgray}{\\textbf{Doc} (\\textit{Ada})}"
+        == "\\textbf{Doc} (\\textit{Ada})"
     )
-    assert (
-        _make_running_header({"title": "Doc"}) == "\\textcolor{headgray}{\\textbf{Doc}}"
-    )
+    assert _make_running_header({"title": "Doc"}) == "\\textbf{Doc}"
     assert _make_running_header({}) == ""
-    assert (
-        _make_running_header({"title": "My & Doc"})
-        == "\\textcolor{headgray}{\\textbf{My \\& Doc}}"
-    )
+    assert _make_running_header({"title": "My & Doc"}) == "\\textbf{My \\& Doc}"
 
 
 def test_ruby_to_span():
@@ -234,24 +232,32 @@ def test_process_html_fragment_wrapped():
 
 def test_default_cjk_font_by_lang():
     assert _default_cjk_font("ja") == DEFAULT_CJK_JP_FONT
-    assert _default_cjk_font("zh-CN") == DEFAULT_CJK_SC_FONT
-    assert _default_cjk_font("zh-Hans") == DEFAULT_CJK_SC_FONT
-    assert _default_cjk_font("zh-TW") == DEFAULT_CJK_TC_FONT
-    assert _default_cjk_font("zh-Hant") == DEFAULT_CJK_TC_FONT
+    assert _default_cjk_font("zh-CN") == DEFAULT_CJK_ZH_CN_FONT
+    assert _default_cjk_font("zh-Hans") == DEFAULT_CJK_ZH_CN_FONT
+    assert _default_cjk_font("zh-TW") == DEFAULT_CJK_ZH_TW_FONT
+    assert _default_cjk_font("zh-Hant") == DEFAULT_CJK_ZH_TW_FONT
+    assert _default_cjk_font("zh-HK") == DEFAULT_CJK_ZH_HK_FONT
+    assert _default_cjk_font("ko") == DEFAULT_CJK_KR_FONT
     assert _default_cjk_font("en") == DEFAULT_CJK_JP_FONT
     assert _default_cjk_font(None) == DEFAULT_CJK_JP_FONT
-
-
-def test_cjk_fallback_chain_by_lang():
-    assert _cjk_fallback_chain("ja")[0] == DEFAULT_CJK_JP_FONT
-    assert _cjk_fallback_chain("zh-CN")[0] == DEFAULT_CJK_SC_FONT
-    assert _cjk_fallback_chain("zh-TW")[0] == DEFAULT_CJK_TC_FONT
 
 
 def test_select_font_keeps_available_font():
     if not _font_available(DEFAULT_MAIN_FONT):
         pytest.skip("Noto Sans not installed")
     assert _select_font(DEFAULT_MAIN_FONT, []) == DEFAULT_MAIN_FONT
+
+
+def test_make_latex_header_uses_head_font():
+    header = _make_latex_header(
+        "Noto Serif",
+        "Noto Sans CJK JP",
+        "Noto Sans Mono",
+        "Symbola",
+        head_font=DEFAULT_HEAD_FONT,
+    )
+    assert r"\newfontfamily{\headfont}{Noto Sans}" in header
+    assert r"\titleformat{\section}" in header
 
 
 def test_select_font_falls_back_on_missing():
@@ -382,3 +388,22 @@ def test_convert_inline_code_in_heading(tmp_path):
     assert "Title <code>markdown2html5-base</code>" in text
     assert "x^y" in text
     assert "foo_bar" in text
+
+
+@needs_pandoc
+def test_convert_code_lang_label(tmp_path):
+    import subprocess
+
+    md = '```python\nprint("Hello")\n```\n'
+    data = convert(md, None)
+    assert data is not None
+    pdf_path = tmp_path / "codelang.pdf"
+    pdf_path.write_bytes(data)
+    text = subprocess.run(
+        ["pdftotext", str(pdf_path), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    assert "/python/" in text
+    assert 'print("Hello")' in text

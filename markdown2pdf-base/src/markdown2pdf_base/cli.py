@@ -4,6 +4,7 @@ import sys
 from markdown2pdf_base import __version__, convert, convert_file
 from markdown2pdf_base.converter import (
     DEFAULT_CJK_JP_FONT,
+    DEFAULT_HEAD_FONT,
     DEFAULT_MAIN_FONT,
     DEFAULT_MONO_FONT,
     DEFAULT_SYMBOL_FONT,
@@ -32,6 +33,11 @@ def main() -> None:
         help=f"Main text font name (default: {DEFAULT_MAIN_FONT})",
     )
     parser.add_argument(
+        "--head-font",
+        default=None,
+        help=f"Heading font name (default: {DEFAULT_HEAD_FONT})",
+    )
+    parser.add_argument(
         "--cjk-font",
         default=None,
         help=f"CJK font name (default by language: {DEFAULT_CJK_JP_FONT})",
@@ -58,6 +64,8 @@ def main() -> None:
         kwargs["lang"] = args.lang
     if args.main_font:
         kwargs["main_font"] = args.main_font
+    if args.head_font:
+        kwargs["head_font"] = args.head_font
     if args.cjk_font:
         kwargs["cjk_font"] = args.cjk_font
     if args.mono_font:
