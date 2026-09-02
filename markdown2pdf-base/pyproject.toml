@@ -1,6 +1,6 @@
 [project]
 name = "markdown2pdf-base"
-version = "0.4.0"
+version = "0.4.1"
 description = "Convert Markdown to PDF using markdown2html5-base and pandoc"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -2,7 +2,7 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.4.0 — feature-aligned with `markdown2html5-base` 0.4.0. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
+Version 0.4.1 — feature-aligned with `markdown2html5-base` 0.4.0. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
 
 ## Requirements
 

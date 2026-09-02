@@ -1034,8 +1034,13 @@ def _pandoc_html_to_pdf(
     config: FontConfig,
     cjk_fonts: Mapping[str, str],
     main_cjk_key: str,
+    cwd: str | None = None,
 ) -> None:
-    """Convert the given HTML file to a PDF by running pandoc with the XeLaTeX engine."""
+    """Convert the given HTML file to a PDF by running pandoc with the XeLaTeX engine.
+
+    ``cwd`` is the working directory for the pandoc/xelatex subprocess; set it to
+    the document's source directory so relative image paths resolve correctly.
+    """
     header = _make_latex_header(config, cjk_fonts, main_cjk_key, metadata)
 
     # Write the header and Lua filter to temp files so pandoc can reference them
@@ -1065,7 +1070,9 @@ def _pandoc_html_to_pdf(
             "--lua-filter",
             lua_filter_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, cwd=cwd
+        )
         if result.returncode != 0:
             raise RuntimeError(
                 f"pandoc failed: {result.stderr.strip() or result.stdout.strip() or 'code ' + str(result.returncode)}"
@@ -1175,6 +1182,7 @@ def convert(
         "config": config,
         "cjk_fonts": config.cjk,
         "main_cjk_key": main_cjk_key,
+        "cwd": source_dir,
     }
     pdf_path: str | None = None
     try:
