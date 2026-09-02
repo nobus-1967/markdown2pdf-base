@@ -2,11 +2,11 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.3.3 — feature-aligned with `markdown2html5-base` 0.3.7. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
+Version 0.4.0 — feature-aligned with `markdown2html5-base` 0.4.0. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
 
 ## Requirements
 
-- `markdown2html5-base >= 0.3.7` (Python package)
+- `markdown2html5-base >= 0.4.0` (Python package)
 - `pandoc` with Lua filter support
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `titlesec`, `mdframed`, `longtable`, `colortbl`
 - Fonts (see [Fonts](#fonts)): `Noto Fonts` (`Noto Sans`, `Noto Serif`, `Noto Sans Mono`, `Noto Serif CJK JP/SC/TC/HK/KR`) and `Symbola`; run `fc-list`/`fc-match` from `fontconfig` to verify availability
@@ -72,9 +72,9 @@ data = convert(
 
 ## Features
 
-All `markdown2html5-base` 0.3.7 operations are supported:
+All `markdown2html5-base` 0.4.0 operations are supported:
 
-- Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
+- Headings (H1–H6) with custom IDs (H6 rendered as a sans-serif bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline (`<u>` tag)
 - Inline code and fenced code blocks
 - Links and images (relative paths resolved automatically; image titles such as `![alt](img.png "Title")` become figure captions — images wrapped in `<figure>` render in-flow scaled to the line width, with an italic, left-aligned `figcaption` below and no auto-numbering; untitled images render without a caption or "Figure N:" label)
@@ -146,6 +146,7 @@ The symbol font declaration in the generated LaTeX header is guarded with `\IfFo
 
 - Emoji and symbols are detected by Unicode block (including Mathematical Operators) in the Lua filter and rendered through the symbol font, so adjacent text always stays in the main font (no `ucharclasses` font leaking).
 - Ruby annotations are converted to LaTeX `\ruby{}{}` via a Lua filter.
+- Definition lists are typeset with the term in bold on its own line, followed by each definition as indented, italicized text (multiple definitions per term are stacked vertically).
 - Footnotes render as a superscript link plus a footnotes list at the end.
 - Inline code is printed in plain black mono (`\texttt`). `\allowbreak` (a penalty node, unaffected by `\hyphenpenalty`) is inserted after every token, so long runs wrap anywhere instead of overflowing table cells and paragraph lines. Code inside headings uses plain `\texttt` (no breaks) — macros and break commands are unsafe in moving arguments such as bookmarks and the table of contents.
 - Fenced code blocks are typeset in black on a light gray (`RGB(245,245,245)`) background inside a black frame via an `fvextra` `verbatim` override with line breaking enabled (`breaklines`); wrapped lines show no break symbol.

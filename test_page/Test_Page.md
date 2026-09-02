@@ -7,7 +7,7 @@ keywords: markdown, html5
 published: 2026-09-02
 ---
 
-[Test Page, created for markdown2html5-base converter (ver. 0.3.7).]: #
+[Test Page, created for markdown2html5-base converter (ver. 0.4.0).]: #
 
 # Heading 1
 
@@ -84,7 +84,7 @@ Some text.
 
 **Furigana** (Japanese kanji spelling): {:ja} {私|わたし}は{日|に}{本|ほん}{人|じん}です。{:}
 
-Some **typographic symbols** and **emoji** as (tm), (c), 1/2, --, :dnarrow:, "Hello!", <<It's me!>>, :heart:,  etc.
+Some **typographic symbols** and **emoji** as (tm), (c), 1/2, --, &darr;, "Hello!", <<It's me!>>, :heart:,  etc.
 
 This \*not italic\* is escaped by \\.
 
