@@ -6,7 +6,7 @@
     <meta name="description" content="Test Page for markdown2html5-base converter." />
     <meta name="keywords" content="markdown, html5" />
     <title>Test Page</title>
-    <meta name="published" content="2026-08-18" />
+    <meta name="published" content="2026-09-02" />
     <style>
 body {
   padding: 20px;
@@ -136,6 +136,19 @@ tfoot tr {
   background-color: #f5f5f5;
   font-style: italic;
 }
+figure {
+  display: block;
+  margin: 0;
+}
+figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+figcaption {
+  text-align: left;
+  font-style: italic;
+}
 ruby { ruby-position: over; }
 rt {
   letter-spacing: 0.05em;
@@ -214,7 +227,7 @@ span[lang="ko"] {
     </style>
   </head>
   <body>
-<!--Test Page, created for markdown2html5-base converter (ver. 0.3.4).-->
+<!--Test Page, created for markdown2html5-base converter (ver. 0.3.7).-->
 <h1>Heading 1</h1>
 <h2>Heading 2</h2>
 <h3>Heading 3</h3>
@@ -222,10 +235,10 @@ span[lang="ko"] {
 <h6>Heading 6: Formatting the text</h6>
 <p>This is a paragraph. Any text may be <strong>bold</strong>, <em>italic</em>, <u>underlined</u>, <s>strikethrough (deleted)</s>.</p>
 <p>The text may also be <mark>marked (highlighted)</mark>. And this is <code>a piece of something looks like an inline code</code> inside a regular paragraph.</p>
-<p>You can use superscript (X<sup>2</sup>) or subscript (H<sub>2</sub>O) symbols.</p>
+<p>You can use superscript (X<sub>2</sub>) or subscript (H<sup>2</sup>O) symbols.</p>
 <p>And you can add hyperlinks like <a href="https://www.markdownguide.org/">Markdown Guide</a>, footnotes<sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup> (LINE BREAK)<br />
 and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup></p>
-<p>See also <a href="#others">other add-ons</a>.</p>
+<p>See also other <a href="#others">other add-ons</a>.</p>
 <h6>Blocks of text</h6>
 <p>Lists are ordered:</p>
 <ol>
@@ -237,14 +250,15 @@ and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup>
 <p>or unordered:</p>
 <ul>
   <li>Bird</li>
-  <li><span lang="fr">Chat</span></li>
+  <li>Chat</li>
   <li>Dog</li>
 </ul>
 <!-- -->
 <p>Definition list:</p>
-<dl lang="de">
+<dl>
   <dt>Frau</dt>
-  <dd>weiblicher erwachsener Mensch; Ehefrau</dd>
+  <dd>weiblicher erwachsener Mensch</dd>
+  <dd>Ehefrau</dd>
 </dl>
 <blockquote>
   <p>This is a citation (blockquote).</p>
@@ -286,19 +300,22 @@ and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup>
     </tr>
   </tfoot>
 </table>
-<p><img src="mark_editor.png" alt="Markdown Image" title="Markdown Editor"></p>
+<figure>
+  <img src="mark_editor.png" alt="Markdown Image" title="Simple Markdown editor &ldquo;Mark&nbsp;Editor&rdquo;">
+  <figcaption>Simple Markdown editor &ldquo;Mark&nbsp;Editor&rdquo;</figcaption>
+</figure>
 <hr>
 <h6>Test Russian symbols</h6>
 <p lang="ru">А этот текст на русском! Ещё текст&hellip;</p>
 <h6 id="others">Others</h6>
-<p><strong>Furigana</strong> (Japanese kanji spelling): <span lang="ja"><ruby>私<rp>(</rp><rt>わたし</rt><rp>)</rp></ruby>は<ruby>日<rp>(</rp><rt>に</rt><rp>)</rp></ruby><ruby>本<rp>(</rp><rt>ほん</rt><rp>)</rp></ruby><ruby>人<rp>(</rp><rt>じん</rt><rp>)</rp></ruby>です。</span></p>
+<p><strong>Furigana</strong> (Japanese kanji spelling): <span lang="ja"> <ruby>私<rp>(</rp><rt>わたし</rt><rp>)</rp></ruby>は<ruby>日<rp>(</rp><rt>に</rt><rp>)</rp></ruby><ruby>本<rp>(</rp><rt>ほん</rt><rp>)</rp></ruby><ruby>人<rp>(</rp><rt>じん</rt><rp>)</rp></ruby>です。</span></p>
 <p>Some <strong>typographic symbols</strong> and <strong>emoji</strong> as &trade;, &copy;, &frac12;, &ndash;, &darr;, &ldquo;Hello!&rdquo;, &laquo;It&apos;s me!&raquo;, &#10084;&#65039;,  etc.</p>
 <p>This *not italic* is escaped by \.</p>
 <div class="footnotes">
   <hr>
   <ol>
     <li id="fn:1">This is a footnote. <a href="#fnref:1" class="footnote-backref">&uarr;</a></li>
-    <li id="fn:2">2026-08-09 21:00 <a href="#fnref:2" class="footnote-backref">&uarr;</a></li>
+    <li id="fn:2">2026-09-02 08:00 <a href="#fnref:2" class="footnote-backref">&uarr;</a></li>
   </ol>
 </div>
   </body>
