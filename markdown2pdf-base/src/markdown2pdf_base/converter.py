@@ -925,10 +925,12 @@ def _ruby_to_span(html: str) -> str:
 
 def _h6_to_bold_italic_para(html: str) -> str:
     """Turn ``<h6>`` headings into a sans bold-italic paragraph via a ``class="h6"`` span."""
-    pattern = r'<h6\b[^>]*?(?:\bid="([^"]*)")?[^>]*?>(.*?)</h6>'
+    pattern = r"<h6\b([^>]*)>(.*?)</h6>"
+    id_pattern = re.compile(r'\bid="([^"]*)"')
 
     def _convert(m: re.Match[str]) -> str:
-        anchor = f'<a id="{m.group(1)}"></a>' if m.group(1) else ""
+        idm = id_pattern.search(m.group(1))
+        anchor = f'<a id="{idm.group(1)}"></a>' if idm else ""
         return f'{anchor}<p><span class="h6">{m.group(2)}</span></p>'
 
     return re.sub(pattern, _convert, html, flags=re.DOTALL | re.IGNORECASE)
