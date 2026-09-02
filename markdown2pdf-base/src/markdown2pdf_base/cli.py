@@ -14,6 +14,12 @@ from markdown2pdf_base.converter import (
 
 
 def main() -> None:
+    """Entry point for the ``markdown2pdf-base`` command-line interface.
+
+    Parses command-line arguments (input file, output path, language and font
+    overrides), then converts Markdown to PDF. Reads from stdin when no input
+    file is given and stdout is not a TTY.
+    """
     parser = argparse.ArgumentParser(
         description="Convert Markdown to PDF using markdown2html5-base + pandoc"
     )

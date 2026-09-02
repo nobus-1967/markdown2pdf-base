@@ -1,3 +1,12 @@
+"""Convert Markdown to PDF via markdown2html5-base and pandoc/xelatex.
+
+This module bridges the HTML produced by :mod:`markdown2html5_base` to a PDF
+built by pandoc using the xelatex engine. It applies font selection, a bespoke
+Lua filter and LaTeX preamble to faithfully reproduce the HTML layout
+(headings, tables, code blocks, ruby annotations, per-language CJK fonts and
+``<figure>``/``<figcaption>`` images) in the generated PDF.
+"""
+
 from __future__ import annotations
 
 import os
@@ -56,6 +65,7 @@ _CSS = """\
 """
 
 _LATEX_PREAMBLE = r"""\usepackage[margin=25.4mm]{geometry}
+\usepackage{graphicx}
 \usepackage{fancyhdr}
 \usepackage{fontspec}
 \usepackage{xeCJK}
@@ -105,6 +115,24 @@ _LATEX_PREAMBLE = r"""\usepackage[margin=25.4mm]{geometry}
 }{%%
   \end{mdframed}%%
 }
+\makeatletter
+\providecommand{\pandocbounded}[1]{%%
+  \begingroup
+  \setbox\@tempboxa\hbox{#1}%%
+  \@tempdima=\dimexpr\ht\@tempboxa\relax
+  \@tempdimb=\dimexpr\wd\@tempboxa\relax
+  \ifdim\@tempdima>\textheight
+    \@tempdimb=\dimexpr\@tempdimb * \textheight / \@tempdima\relax
+    \@tempdima=\textheight
+  \fi
+  \ifdim\@tempdimb>\linewidth
+    \@tempdima=\dimexpr\@tempdima * \linewidth / \@tempdimb\relax
+    \@tempdimb=\linewidth
+  \fi
+  \resizebox{\@tempdimb}{\@tempdima}{#1}%%
+  \endgroup
+}
+\makeatother
 \emergencystretch=1.5em
 \hyphenpenalty=10000
 \exhyphenpenalty=10000
@@ -155,6 +183,12 @@ _LATEX_PREAMBLE = r"""\usepackage[margin=25.4mm]{geometry}
 
 
 def _latex_escape(value: str) -> str:
+    """Escape LaTeX-special characters in ``value``.
+
+    Replaces ``\\ { } % # & _ ~ ^`` with their LaTeX-safe equivalents so the
+    text can be embedded in the preamble (e.g. PDF metadata or the running
+    header).
+    """
     replacements = {
         "\\": r"\textbackslash{}",
         "{": r"\{",
@@ -170,6 +204,12 @@ def _latex_escape(value: str) -> str:
 
 
 def _make_hypersetup(metadata: dict[str, str]) -> str:
+    """Build the ``\\hypersetup`` directive from document metadata.
+
+    Maps the ``title``/``author``/``description``/``keywords``/``lang`` keys to
+    their corresponding hyperref options (``pdftitle``, ``pdfauthor``, ...).
+    Returns an empty string when there is nothing to set.
+    """
     mapping = {
         "title": "pdftitle",
         "author": "pdfauthor",
@@ -188,6 +228,12 @@ def _make_hypersetup(metadata: dict[str, str]) -> str:
 
 
 def _make_running_header(metadata: dict[str, str]) -> str:
+    """Build the page header text from document metadata.
+
+    Combines the title (bold) with an optional ``(author : published)`` suffix.
+    Returns an empty string when neither a title, author nor publication date
+    is present.
+    """
     title = metadata.get("title")
     author = metadata.get("author")
     published = metadata.get("published")
@@ -207,6 +253,12 @@ def _make_running_header(metadata: dict[str, str]) -> str:
 
 
 def _guard_font_set(set_command: str, chain: list[str]) -> str:
+    """Emit a font-setting command that falls back through ``chain``.
+
+    Produces ``\\<cmd>{name}`` when only one font is available, otherwise
+    nests ``\\IfFontExistsTF`` guards so the first available font in ``chain``
+    is used. Any duplicates are removed while order is preserved.
+    """
     chain = list(dict.fromkeys(chain))
     if len(chain) == 1:
         return f"\\{set_command}{{{chain[0]}}}"
@@ -219,6 +271,11 @@ def _guard_font_set(set_command: str, chain: list[str]) -> str:
 
 
 def _guard_new_cjk_family(family: str, chain: list[str]) -> str:
+    """Emit a ``\\newCJKfontfamily`` declaration with fallback fonts.
+
+    Declares ``\\<family>`` using the first available font in ``chain``,
+    nesting ``\\IfFontExistsTF`` guards when more than one candidate is given.
+    """
     chain = list(dict.fromkeys(chain))
     cmd = f"\\newCJKfontfamily{{\\{family}}}"
     if len(chain) == 1:
@@ -551,6 +608,42 @@ local function render_code_lang_block(label, code)
     .. '\\\\end{mdframed}'
 end
 
+local function image_inline_latex(el)
+  local src = el.src
+  local alt = pandoc.utils.stringify(el.caption)
+  if src:sub(1, 5) == 'data:' then
+    if alt == '' then alt = 'image' end
+    return pandoc.RawInline('latex', '{\\\\itshape [' .. alt .. ']}')
+  end
+  return pandoc.RawInline('latex',
+    '\\\\pandocbounded{\\\\includegraphics[keepaspectratio,alt={' .. alt .. '}]{' .. src .. '}}')
+end
+
+local function figure_latex(fig)
+  -- Render a pandoc Figure (from markdown2html5-base <figure>) as a
+  -- left-aligned block: the image is displayed at up to line width (block,
+  -- max-width 100%%), followed by an italic, left-aligned caption. Mirrors
+  -- the markdown2html5-base 0.3.7 CSS (figure display:block; figure img
+  -- max-width:100%%; figcaption text-align:left + font-style:italic) with no
+  -- float and no auto-numbering.
+  local cap = serialize_inlines(fig.caption.long)
+  local imgs = pandoc.List()
+  local scan = { Image = function(el) imgs:insert(el) return el end }
+  for _, blk in ipairs(fig.content) do
+    pandoc.walk_block(blk, scan)
+  end
+  local im = {}
+  for _, el in ipairs(imgs) do
+    im[#im + 1] = image_inline_latex(el).text
+  end
+  local out = '\\\\noindent'
+  out = out .. table.concat(im, '\\\\par\\\\smallskip\\\\par')
+  if cap ~= '' then
+    out = out .. '\\\\par\\n{\\\\itshape ' .. cap .. '}'
+  end
+  return out .. '\\n\\\\par'
+end
+
 function Pandoc(doc)
   local out = pandoc.List()
   local i = 1
@@ -587,6 +680,9 @@ function Pandoc(doc)
         i = i + 1
       elseif b.t == 'HorizontalRule' then
         out:insert(pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{0.4pt}'))
+        i = i + 1
+      elseif b.t == 'Figure' then
+        out:insert(pandoc.RawBlock('latex', figure_latex(b)))
         i = i + 1
       else
         out:insert(pandoc.walk_block(b, body_walker))
@@ -649,6 +745,7 @@ _TITLE_RE = re.compile(r"<title>(.*?)</title>", re.DOTALL)
 
 
 def _font_available(family: str) -> bool:
+    """Return True if a font family is installed (via ``fc-list``)."""
     try:
         result = subprocess.run(
             ["fc-list", f":family={family}"],
@@ -663,6 +760,11 @@ def _font_available(family: str) -> bool:
 
 
 def _select_font(family: str, fallbacks: list[str]) -> str:
+    """Choose an installed font, preferring ``family`` over ``fallbacks``.
+
+    Returns the first available candidate and warns when ``family`` itself is
+    missing. Falls back to ``family`` verbatim if none are installed.
+    """
     chain = [family, *[f for f in fallbacks if f != family]]
     for name in chain:
         if _font_available(name):
@@ -676,10 +778,17 @@ def _select_font(family: str, fallbacks: list[str]) -> str:
 
 
 def _is_traditional_chinese(lang: str | None) -> bool:
+    """Return True if ``lang`` denotes Traditional Chinese."""
     return (lang or "").lower().startswith(("zh-hant", "zh-tw", "zh-mo"))
 
 
 def _cjk_key_for_lang(lang: str | None) -> str:
+    """Map a BCP 47 language tag to a CJK font key (ja/cn/tw/hk/kr).
+
+    Chinese tags resolve to ``hk`` or ``tw`` for Traditional variants and
+    ``cn`` for Simplified; ``ko`` resolves to ``kr``; anything else defaults to
+    ``ja``.
+    """
     lang = (lang or "").lower()
     if lang.startswith("zh"):
         if lang in ("zh-hk", "zh-hant-hk"):
@@ -693,6 +802,7 @@ def _cjk_key_for_lang(lang: str | None) -> str:
 
 
 def _default_cjk_font(lang: str | None) -> str:
+    """Return the default CJK font family for ``lang``."""
     return CJK_DEFAULT_FONTS[_cjk_key_for_lang(lang)]
 
 
@@ -702,6 +812,11 @@ def _default_cjk_font(lang: str | None) -> str:
 
 
 def _resolve_image_src(html: str, source_dir: str) -> str:
+    """Resolve relative ``src`` attributes in ``html`` against ``source_dir``.
+
+    Absolute paths, URLs, data URIs and root-relative paths are left untouched.
+    """
+
     def _abs(m: re.Match) -> str:
         src = m.group(1)
         if src.startswith(("http://", "https://", "data:", "/")):
@@ -713,14 +828,21 @@ def _resolve_image_src(html: str, source_dir: str) -> str:
 
 
 def _strip_footnote_backref(html: str) -> str:
+    """Remove footnote back-reference links (``class=\"footnote-backref\"``)."""
     return re.sub(r'\s*<a[^>]*class="footnote-backref"[^>]*>.*?</a>', "", html)
 
 
 def _strip_image_titles(html: str) -> str:
+    """Remove ``title`` attributes from ``<img>`` tags.
+
+    Image titles are shown as ``<figcaption>`` by markdown2html5-base, so the
+    duplicate ``title`` attribute is dropped from the image tag itself.
+    """
     return re.sub(r'(<img\b[^>]*?)\s+title="[^"]*"([^>]*>)', r"\1\2", html)
 
 
 def _normalize_quotes(html: str) -> str:
+    """Replace smart/curly quotes with their straight ASCII equivalents."""
     return (
         html.replace("\u201c", '"')
         .replace("\u201d", '"')
@@ -730,11 +852,18 @@ def _normalize_quotes(html: str) -> str:
 
 
 def _strip_variation_selectors(html: str) -> str:
+    """Remove Unicode variation selectors (e.g. U+FE0F) and their entities."""
     html = html.replace("\ufe0f", "")
     return re.sub(r"&#65039;|&#x[fF][eE]0[fF];", "", html)
 
 
 def _ruby_to_span(html: str) -> str:
+    """Rewrite ``<ruby>`` markup into ``<span class=\"ruby\" rt=\"...\">``.
+
+    Converts the HTML ruby annotation produced by markdown2html5-base into a
+    span carrying the reading in its ``rt`` attribute, which the Lua filter
+    later turns into a LaTeX ``\\ruby``.
+    """
     return re.sub(
         r"<ruby>([^<]+)<rp>\(</rp><rt>([^<]+)</rt><rp>\)</rp></ruby>",
         lambda m: f'<span class="ruby" rt="{m.group(2)}">{m.group(1)}</span>',
@@ -743,19 +872,29 @@ def _ruby_to_span(html: str) -> str:
 
 
 def _is_html(text: str) -> bool:
+    """Return True if ``text`` looks like HTML rather than Markdown."""
     return text.strip().startswith("<")
 
 
 def _strip_metadata_tags(html: str) -> str:
+    """Remove ``<title>`` and ``<meta>`` tags from ``html``."""
     html = re.sub(r"<title[^>]*>.*?</title>", "", html, flags=re.DOTALL | re.IGNORECASE)
     return re.sub(r"<meta[^>]*>", "", html, flags=re.IGNORECASE)
 
 
 def _is_full_document(html: str) -> bool:
+    """Return True if ``html`` is a complete ``<html>`` document."""
     return bool(_FULL_DOC_RE.match(html))
 
 
 def _h6_to_bold_italic_para(html: str) -> str:
+    """Convert ``<h6>`` headings into bold-italic paragraph anchors.
+
+    H6 headings are too small for print; they become a ``<strong><em>``
+    paragraph, preserving any ``id`` as an anchor so internal links keep
+    working.
+    """
+
     def _convert(m: re.Match) -> str:
         attrs = m.group(1)
         anchor = ""
@@ -779,6 +918,7 @@ def _h6_to_bold_italic_para(html: str) -> str:
 
 
 def _extract_metadata(html: str) -> dict[str, str]:
+    """Extract title and meta-tag metadata from a full HTML document."""
     metadata: dict[str, str] = {}
     title = _TITLE_RE.search(html)
     if title:
@@ -791,6 +931,7 @@ def _extract_metadata(html: str) -> dict[str, str]:
 
 
 def _wrap_html(body: str, lang: str, main: str, mono: str) -> str:
+    """Wrap an HTML fragment in a minimal full document with embedded CSS."""
     return f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
@@ -807,6 +948,7 @@ def _wrap_html(body: str, lang: str, main: str, mono: str) -> str:
 
 
 def _inject_css(full_html: str, main: str, mono: str) -> str:
+    """Inject the stylesheet into the ``<head>`` of a full HTML document."""
     style = _CSS.format(main=main, mono=mono)
     return re.sub(
         r"<head>",
@@ -817,6 +959,7 @@ def _inject_css(full_html: str, main: str, mono: str) -> str:
 
 
 def _cjk_family_name(key: str) -> str:
+    """Return the LaTeX control-sequence name for a CJK font family."""
     return f"cjk{key}"
 
 
@@ -829,6 +972,11 @@ def _make_latex_header(
     head_font: str = DEFAULT_HEAD_FONT,
     pdf_metadata: dict[str, str] | None = None,
 ) -> str:
+    """Assemble the full LaTeX preamble using the resolved font choices.
+
+    Substitutes the selected fonts, CJK family declarations, running header
+    and hyperref setup into :data:`_LATEX_PREAMBLE`.
+    """
     main_decl = _guard_font_set("setmainfont", [main_font])
     cjk_families = "\n".join(
         _guard_new_cjk_family(
@@ -856,6 +1004,11 @@ def _make_latex_header(
 
 
 def _write_lua_filter(path: str, cjk_fonts: dict[str, str], main_cjk_key: str) -> None:
+    """Write the pandoc Lua filter to ``path``.
+
+    Renders :data:`_LUA_FILTER_CODE` with the document-language CJK font used
+    for ruby annotations.
+    """
     ruby_font = cjk_fonts[main_cjk_key]
     with open(path, "w", encoding="utf-8") as f:
         f.write(_LUA_FILTER_CODE % ruby_font)
@@ -878,6 +1031,11 @@ def _pandoc_html_to_pdf(
     symbol_font: str,
     head_font: str,
 ) -> None:
+    """Run pandoc/xelatex to convert an HTML file into a PDF at ``pdf_path``.
+
+    Writes a temporary LaTeX header, regenerates the Lua filter, invokes pandoc
+    and cleans up the temporary header.
+    """
     header = _make_latex_header(
         main_font,
         cjk_fonts,
@@ -933,6 +1091,13 @@ def _process_html(
     main: str,
     mono: str,
 ) -> tuple[str, dict[str, str]]:
+    """Post-process ``html_body`` and return the final HTML plus metadata.
+
+    For a full document this extracts metadata and injects CSS; otherwise the
+    fragment is wrapped. Relative image sources are resolved, then quote,
+    footnote, image-title, variation-selector, ruby and h6 transforms are
+    applied.
+    """
     if _is_full_document(html_body):
         metadata = _extract_metadata(html_body)
         full = _inject_css(_strip_metadata_tags(html_body), main, mono)
@@ -964,6 +1129,13 @@ def convert(
     mono_font: str | None = None,
     symbol_font: str | None = None,
 ) -> bytes | None:
+    """Convert ``markdown_text`` (or HTML) to PDF.
+
+    Renders Markdown to HTML via markdown2html5-base (unless the input is
+    already HTML), selects fonts, post-processes the HTML and runs pandoc. If
+    ``output_path`` is given the PDF is written there and ``None`` is returned;
+    otherwise the PDF bytes are returned.
+    """
     html_body = (
         markdown_text
         if _is_html(markdown_text)
@@ -1033,6 +1205,11 @@ def convert_file(
     mono_font: str | None = None,
     symbol_font: str | None = None,
 ) -> bytes | None:
+    """Read ``input_path`` and convert it to a PDF.
+
+    Resolves image sources relative to the input file's directory before
+    delegating to :func:`convert`.
+    """
     with open(input_path, encoding="utf-8") as f:
         text = f.read()
     source_dir = os.path.dirname(os.path.abspath(input_path))
@@ -1051,5 +1228,6 @@ def convert_file(
 
 
 def _extract_lang(html: str) -> str | None:
+    """Extract the ``lang`` attribute from an ``<html>`` tag, if present."""
     match = re.search(r'<html[^>]*\blang="([^"]*)"', html)
     return match.group(1) if match else None

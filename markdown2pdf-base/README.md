@@ -2,11 +2,11 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.3.2 — feature-aligned with `markdown2html5-base` 0.3.5. Inline code is rendered in plain black mono; long runs break across lines via `\allowbreak` insertion; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments). Per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously in one document; ruby annotations keep the doc-language CJK font.
+Version 0.3.3 — feature-aligned with `markdown2html5-base` 0.3.7. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
 
 ## Requirements
 
-- `markdown2html5-base >= 0.3.5` (Python package)
+- `markdown2html5-base >= 0.3.7` (Python package)
 - `pandoc` with Lua filter support
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `titlesec`, `mdframed`, `longtable`, `colortbl`
 - Fonts (see [Fonts](#fonts)): `Noto Fonts` (`Noto Sans`, `Noto Serif`, `Noto Sans Mono`, `Noto Serif CJK JP/SC/TC/HK/KR`) and `Symbola`; run `fc-list`/`fc-match` from `fontconfig` to verify availability
@@ -72,12 +72,12 @@ data = convert(
 
 ## Features
 
-All `markdown2html5-base` 0.3.5 operations are supported:
+All `markdown2html5-base` 0.3.7 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
-- Bold, italic, strikethrough, highlight, subscript, superscript, underline (now `<u>` tag instead of `<ins>`)
+- Bold, italic, strikethrough, highlight, subscript, superscript, underline (`<u>` tag)
 - Inline code and fenced code blocks
-- Links and images (relative paths resolved automatically; image titles such as `![alt](img.png "Title")` are omitted in the PDF)
+- Links and images (relative paths resolved automatically; image titles such as `![alt](img.png "Title")` become figure captions — images wrapped in `<figure>` render in-flow scaled to the line width, with an italic, left-aligned `figcaption` below and no auto-numbering; untitled images render without a caption or "Figure N:" label)
 - Horizontal rules
 - Unordered, ordered, and task lists (checkboxes)
 - Blockquotes
