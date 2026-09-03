@@ -4,10 +4,10 @@ title: Test Page
 author: nobus-1967
 description: Test Page for markdown2html5-base converter.
 keywords: markdown, html5
-published: 2026-09-02
+published: 2026-09-03
 ---
 
-[Test Page, created for markdown2html5-base converter (ver. 0.4.0).]: #
+[Test Page, created for markdown2html5-base converter (ver. 0.5.0).]: #
 
 # Heading 1
 
@@ -90,4 +90,4 @@ This \*not italic\* is escaped by \\.
 
 [^1]: This is a footnote.
 
-[^2]: 2026-09-02 08:00
+[^2]: 2026-09-03 12:00

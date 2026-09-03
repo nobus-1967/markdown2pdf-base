@@ -2,11 +2,11 @@
 
 Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex).
 
-Version 0.4.2 — feature-aligned with `markdown2html5-base` 0.4.0. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
+Version 0.5.0 — feature-aligned with `markdown2html5-base` 0.5.0. Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also from 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
 
 ## Requirements
 
-- `markdown2html5-base >= 0.4.0` (Python package)
+- `markdown2html5-base >= 0.5.0` (Python package)
 - `pandoc` with Lua filter support
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `titlesec`, `mdframed`, `longtable`, `colortbl`
 - Fonts (see [Fonts](#fonts)): `Noto Fonts` (`Noto Sans`, `Noto Serif`, `Noto Sans Mono`, `Noto Serif CJK JP/SC/TC/HK/KR`) and `Symbola`; run `fc-list`/`fc-match` from `fontconfig` to verify availability
@@ -46,11 +46,8 @@ markdown2pdf-base input.md -o output.pdf \
 | `--mono-font`     | Monospace font                                       | `Noto Sans Mono`    |
 | `--symbol-font`   | Symbol/emoji font                                    | `Symbola`           |
 
-The per-language `--cjk-*-font` options can be used simultaneously in one
-document. Text is routed to the matching CJK font by script: Hiragana and
-Katakana use the Japanese font, Hangul uses the Korean font, and Han
-characters use the font for the document language (see the `lang` mapping
-below).
+The per-language `--cjk-*-font` options can be used simultaneously in one document. Text is routed to the matching CJK font by script: Hiragana and
+Katakana use the Japanese font, Hangul uses the Korean font, and Han characters use the font for the document language (see the `lang` mapping below).
 
 ## Python API
 
@@ -72,7 +69,7 @@ data = convert(
 
 ## Features
 
-All `markdown2html5-base` 0.4.0 operations are supported:
+All `markdown2html5-base` 0.5.0 operations are supported:
 
 - Headings (H1–H6) with custom IDs (H6 rendered as a sans-serif bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline (`<u>` tag)
@@ -111,8 +108,7 @@ published: 2026-08-09
 Body text.
 ```
 
-Recognized keys: `lang`, `title`, `author`, `description`, `keywords`, `published` (with `date` accepted as an alias for `published`). Front matter values are used only for PDF metadata (Title,
-Author, Subject, Keywords via `\hypersetup`) and for CJK font selection via `lang` — they never appear as text in the PDF body. `lang` selects the default CJK font (see below).
+Recognized keys: `lang`, `title`, `author`, `description`, `keywords`, `published` (with `date` accepted as an alias for `published`). Front matter values are used only for PDF metadata (Title, Author, Subject, Keywords via `\hypersetup`) and for CJK font selection via `lang` — they never appear as text in the PDF body. `lang` selects the default CJK font (see below).
 
 ## Fonts
 
@@ -130,7 +126,7 @@ Default fonts:
 | CJK    | `Noto Serif CJK KR`   |
 | Symbol | `Symbola`             |
 
-Headings (H1–H6) are typeset in the heading font (`\newfontfamily{\headfont}` + `titlesec`); body text uses the main font.
+Body text is set to **12pt**; headings H1–H5 are typeset in the heading font (`\titleformat`) at absolute sizes (24/21/18/15/13.5pt) independent of the document size, and H6 renders as a bold-italic heading-font line at the body size (**12pt**), matching the CSS `h6 { font-style: italic }` with the size reset to the base.
 
 CJK font selection by `lang`:
 
@@ -140,6 +136,8 @@ CJK font selection by `lang`:
 - `zh-Hant` / `zh-TW` / `zh-MO` → `Noto Serif CJK TC`
 - `zh-HK` / `zh-Hant-HK` → `Noto Serif CJK HK`
 
+Per-span language selection is also supported: a `<span lang="ja">`, `<span lang="zh-CN">`, `<span lang="zh-TW">`, `<span lang="zh-HK">` or `<span lang="ko">` renders with that language's CJK font, matching the CSS `span[lang="*"]` rules, so multiple CJK languages can coexist in one document. The same applies to block elements — `<p lang="ja">`, `<li lang="ko">`, `<blockquote lang="zh-CN">`, etc. — and combinations such as a `<span lang="...">` nested inside a `lang`-marked block.
+
 The symbol font declaration in the generated LaTeX header is guarded with `\IfFontExistsTF` and falls back to `Symbola` when the requested font cannot be loaded by XeLaTeX (e.g. color fonts).
 
 ## Notes
@@ -148,7 +146,8 @@ The symbol font declaration in the generated LaTeX header is guarded with `\IfFo
 - Ruby annotations are converted to LaTeX `\ruby{}{}` via a Lua filter.
 - Definition lists are typeset with the term in bold on its own line, followed by each definition as indented, italicized text (multiple definitions per term are stacked vertically).
 - Footnotes render as a superscript link plus a footnotes list at the end.
-- Inline code is printed in plain black mono (`\texttt`). `\allowbreak` (a penalty node, unaffected by `\hyphenpenalty`) is inserted after every token, so long runs wrap anywhere instead of overflowing table cells and paragraph lines. Code inside headings uses plain `\texttt` (no breaks) — macros and break commands are unsafe in moving arguments such as bookmarks and the table of contents.
-- Fenced code blocks are typeset in black on a light gray (`RGB(245,245,245)`) background inside a black frame via an `fvextra` `verbatim` override with line breaking enabled (`breaklines`); wrapped lines show no break symbol.
+- Word wrapping matches the CSS `overflow-wrap` rules: `\allowbreak` (a penalty node, unaffected by `\hyphenpenalty`) is inserted after every character of plain text tokens, so long unbreakable words wrap in paragraphs, list items, blockquotes, definition terms/definitions, figure captions, and table cells (header/footer/body) instead of overflowing — matching `word-break: break-all`/`overflow-wrap: anywhere`. TeX still prefers breaking at spaces, so normal words are unaffected.
+- Inline code is printed in plain black mono (`\texttt`) with a two-tier break rule: it prefers line breaks at spaces and at separator characters (`- / = _ ( [ { , : ; \`); it breaks anywhere (`\penalty1000\allowbreak`) only when a long run has no such break point. Code inside headings uses plain `\texttt` (no breaks) — macros and break commands are unsafe in moving arguments such as bookmarks and the table of contents. When an inline `<code lang="ja|zh-*|ko">` is marked as CJK, its CJK glyphs render in the matching CJK mono font (`Noto Sans Mono CJK …`); the break/wrap rules are identical for CJK-mono and standard mono.
+- Fenced/`<pre>` code blocks are typeset in black on a light gray (`RGB(245,245,245)`) background inside a black frame via an `fvextra` `verbatim` override with line breaking enabled (`breaklines`); wrapped lines show no break symbol. A CJK `lang="…"` on the block selects the matching CJK mono font for its CJK glyphs without changing the break behavior.
 - Fenced code blocks with a language tag (`python`) show a `/language/` label in white on a full-width black bar attached to the top of the frame, rendered in the mono font.
 - The running header (`title (author: published)`) in the top margin is rendered in black; `published` can be supplied as YAML front matter `date:` or `published:`.

@@ -18,6 +18,7 @@ import tempfile
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from string import Template
 from typing import Any, Final
 
@@ -38,6 +39,12 @@ DEFAULT_CJK_ZH_TW_FONT: Final[str] = "Noto Serif CJK TC"
 DEFAULT_CJK_ZH_HK_FONT: Final[str] = "Noto Serif CJK HK"
 DEFAULT_CJK_KR_FONT: Final[str] = "Noto Serif CJK KR"
 
+DEFAULT_CJK_MONO_JP_FONT: Final[str] = "Noto Sans Mono CJK JP"
+DEFAULT_CJK_MONO_ZH_CN_FONT: Final[str] = "Noto Sans Mono CJK SC"
+DEFAULT_CJK_MONO_ZH_TW_FONT: Final[str] = "Noto Sans Mono CJK TC"
+DEFAULT_CJK_MONO_ZH_HK_FONT: Final[str] = "Noto Sans Mono CJK HK"
+DEFAULT_CJK_MONO_KR_FONT: Final[str] = "Noto Sans Mono CJK KR"
+
 CJK_FONT_KEYS: Final[tuple[str, ...]] = ("ja", "cn", "tw", "hk", "kr")
 
 CJK_DEFAULT_FONTS: Final[Mapping[str, str]] = {
@@ -46,6 +53,14 @@ CJK_DEFAULT_FONTS: Final[Mapping[str, str]] = {
     "tw": DEFAULT_CJK_ZH_TW_FONT,
     "hk": DEFAULT_CJK_ZH_HK_FONT,
     "kr": DEFAULT_CJK_KR_FONT,
+}
+
+CJK_DEFAULT_MONO_FONTS: Final[Mapping[str, str]] = {
+    "ja": DEFAULT_CJK_MONO_JP_FONT,
+    "cn": DEFAULT_CJK_MONO_ZH_CN_FONT,
+    "tw": DEFAULT_CJK_MONO_ZH_TW_FONT,
+    "hk": DEFAULT_CJK_MONO_ZH_HK_FONT,
+    "kr": DEFAULT_CJK_MONO_KR_FONT,
 }
 
 
@@ -58,14 +73,18 @@ class FontConfig:
     mono: str = DEFAULT_MONO_FONT
     symbol: str = DEFAULT_SYMBOL_FONT
     cjk: Mapping[str, str] = field(default_factory=lambda: dict(CJK_DEFAULT_FONTS))
+    cjk_mono: Mapping[str, str] = field(
+        default_factory=lambda: dict(CJK_DEFAULT_MONO_FONTS)
+    )
 
     def __post_init__(self) -> None:
         """Reject CJK font keys that are not part of the supported set."""
-        invalid_keys = set(self.cjk.keys()) - set(CJK_FONT_KEYS)
-        if invalid_keys:
-            raise ValueError(
-                f"Invalid CJK language keys: {invalid_keys}. Valid: {CJK_FONT_KEYS}"
-            )
+        for fonts in (self.cjk, self.cjk_mono):
+            invalid_keys = set(fonts.keys()) - set(CJK_FONT_KEYS)
+            if invalid_keys:
+                raise ValueError(
+                    f"Invalid CJK font keys: {invalid_keys}. Valid: {CJK_FONT_KEYS}"
+                )
 
 
 @dataclass(frozen=True)
@@ -97,30 +116,57 @@ class DocumentMetadata:
 # ===========================================================================
 
 _CSS_TEMPLATE: Final[Template] = Template("""
-    body { font-family: "$main", sans-serif; font-size: 11pt; line-height: 1.6; max-width: 42em; margin: 2em auto; padding: 0 1em; }
-    pre, code { font-family: "$mono", monospace; font-size: 9.5pt; }
-    pre { background: #f5f5f5; padding: 0.8em; border-radius: 4px; overflow-x: auto; }
-    code { background: #f0f0f0; padding: 0.15em 0.3em; border-radius: 3px; }
-    pre code { background: none; padding: 0; }
-    div.code-lang { font-family: "$mono", monospace; font-size: 9pt; color: #666; margin: 0; padding: 0.2em 0; }
-    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-    th, td { border: 1px solid #ccc; padding: 0.4em 0.6em; text-align: left; }
-    th { background: #eee; }
-    blockquote { margin: 0.5em 0; padding: 0.2em 1em; border-left: 4px solid #ccc; color: #555; }
-    hr { border: none; border-top: 2px solid #ccc; margin: 1.5em 0; }
-    img { max-width: 100%; }
-    .footnotes { margin-top: 2em; font-size: 0.9em; color: #666; }
-    mark { background: #ffec8b; padding: 0.1em 0.2em; }
-    s { color: #999; }
-    sub { font-size: 0.75em; }
-    sup { font-size: 0.75em; }
-    ins { text-decoration: underline; }
-    dl { margin: 0.5em 0; }
-    dt { font-weight: bold; margin-top: 0.3em; }
-    dd { margin-left: 1.5em; }
-    a { text-decoration: underline; font-style: italic; }
-    ruby { ruby-align: center; }
+    body { padding: 20px; font-family: "$main", "Liberation Serif", "Times New Roman", Times, serif; font-size: 18px; line-height: 1.4; color: #000000; background-color: #ffffff; }
+    h1 { margin-top: 1.2em; margin-bottom: 0.6em; font-family: "$head", "Liberation Sans", Arial, sans-serif; font-weight: bold; font-size: 32px; hyphens: auto; word-break: normal; overflow-wrap: break-word; text-wrap: balance; }
+    h2 { margin-top: 1.2em; margin-bottom: 0.6em; font-family: "$head", "Liberation Sans", Arial, sans-serif; font-weight: bold; font-size: 28px; hyphens: auto; word-break: normal; overflow-wrap: break-word; text-wrap: balance; }
+    h3 { margin-top: 1.2em; margin-bottom: 0.6em; font-family: "$head", "Liberation Sans", Arial, sans-serif; font-weight: bold; font-size: 24px; hyphens: auto; word-break: normal; overflow-wrap: break-word; text-wrap: balance; }
+    h4 { margin-top: 1.2em; margin-bottom: 0.6em; font-family: "$head", "Liberation Sans", Arial, sans-serif; font-weight: bold; font-size: 20px; hyphens: auto; word-break: normal; overflow-wrap: break-word; text-wrap: balance; }
+    h5 { margin-top: 1.2em; margin-bottom: 0.6em; font-family: "$head", "Liberation Sans", Arial, sans-serif; font-weight: bold; font-size: 18px; hyphens: auto; word-break: normal; overflow-wrap: break-word; text-wrap: balance; }
+    h6 { margin-top: 1.2em; margin-bottom: 0.6em; font-family: "$head", "Liberation Sans", Arial, sans-serif; font-weight: bold; font-size: 18px; font-style: italic; hyphens: auto; word-break: normal; overflow-wrap: break-word; text-wrap: balance; }
+    p { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    hr { height: 4px; margin: 20px 0; border: none; background-color: #000000; }
+    blockquote { margin-left: 0; padding-left: 20px; border-left: 8px solid #f5f5f5; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    mark { padding: 0 2px; border-radius: 4px; background-color: #ffff00; color: #000000; }
+    a:link { color: #0000cd; }
+    a:visited { color: #9400d3; }
+    a:hover { outline: none; color: #000080; }
+    a:focus { outline: none; color: #000080; }
+    a:active { color: #dc143c; }
+    ol { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    ul { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    li { position: relative; padding-left: 20px; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    dt { font-weight: bold; hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    dd { position: relative; margin-left: 0; padding-left: 20px; font-style: italic; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    code { padding: 2px 4px; border-radius: 4px; font-family: "$mono", "Liberation Mono", "Courier New", Courier, monospace; font-size: 0.9em; line-height: 1; hyphens: none !important; white-space: normal; word-break: break-all; overflow-wrap: anywhere; }
+    pre { max-width: 100%; margin: 0; padding: 20px; border: 1px solid #000000; background-color: #f5f5f5; overflow: auto; scrollbar-color: #000000 transparent; white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; }
+    pre > code { display: block; margin: 0; padding: 0; border: none; border-radius: 0; line-height: 1.2; background-color: transparent; overflow: visible; hyphens: none !important; white-space: pre; word-break: normal; overflow-wrap: normal; }
+    div.code-lang { display: block; padding: 10px 20px; font-family: "$mono", "Liberation Mono", "Courier New", Courier, monospace; font-size: 0.9em; line-height: 1; background-color: #000000; color: #ffffff; font-weight: bold; }
+    table { margin: 20px 0; border-collapse: collapse; }
+    th { padding: 10px 12px; border: 1px solid #000000; font-weight: bold; }
+    td { padding: 10px 12px; border: 1px solid #000000; }
+    thead tr { background-color: #000000; color: #ffffff; }
+    thead th { hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    thead td { hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    tbody th { hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    tbody td { hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    tfoot tr { background-color: #f5f5f5; font-style: italic; }
+    tfoot th { hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    tfoot td { hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
+    figure { display: block; margin: 0; }
+    figure img { display: block; max-width: 100%; height: auto; }
+    figcaption { text-align: left; font-style: italic; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    ruby { ruby-position: over; ruby-align: space-around; }
+    rt { letter-spacing: 0.05em; font-size: 0.55em; line-break: strict; white-space: nowrap; overflow-wrap: normal; }
     rp { display: none; }
+    span[lang="ja"] { font-family: "Noto Serif CJK JP", "Source Han Serif JP", "源ノ明朝", "Source Han Serif", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "IPAexMincho", "IPAMincho", "MS PMincho", "MS Mincho", serif; word-break: break-all; line-break: normal; }
+    span[lang="zh-CN"] { font-family: "Noto Serif CJK SC", "Source Han Serif SC", "思源宋体", "Source Han Serif CN", "Source Han Serif", "Songti SC", "FandolSong", "WenQuanYi Bitmap Song", "SimSun", serif; word-break: break-all; line-break: normal; }
+    span[lang="zh-Hans"] { font-family: "Noto Serif CJK SC", "Source Han Serif SC", "思源宋体", "Source Han Serif CN", "Source Han Serif", "Songti SC", "FandolSong", "WenQuanYi Bitmap Song", "SimSun", serif; word-break: break-all; line-break: normal; }
+    span[lang="zh-TW"] { font-family: "Noto Serif CJK TC", "Source Han Serif TC", "思源宋體", "Source Han Serif TW", "Source Han Serif", "Apple LiSung", "LiSong Pro", "HanaMinA", "PMingLiU", "MingLiU", serif; word-break: break-all; line-break: normal; }
+    span[lang="zh-Hant"] { font-family: "Noto Serif CJK TC", "Source Han Serif TC", "思源宋體", "Source Han Serif TW", "Source Han Serif", "Apple LiSung", "LiSong Pro", "HanaMinA", "PMingLiU", "MingLiU", serif; word-break: break-all; line-break: normal; }
+    span[lang="zh-HK"] { font-family: "Noto Serif CJK HK", "Source Han Serif HK", "思源宋體 香港", "思源宋體", "Source Han Serif", "Apple LiSung", "LiSong Pro", "HanaMinA", "MingLiU_HKSCS", "PMingLiU", "MingLiU", serif; word-break: break-all; line-break: normal; }
+    span[lang="ko"] { font-family: "Noto Serif CJK KR", "Source Han Serif KR", "본명조", "Source Han Serif", "AppleMyungjo", "UnBatang", "은바탕", "Batang", serif; word-break: break-all; line-break: normal; }
+    .footnotes { margin-top: 2em; font-size: 0.9em; color: #666; }
+    a { text-decoration: underline; font-style: italic; }
     """)
 
 _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
@@ -214,11 +260,16 @@ $font_settings
 $cjk_font_settings
 
 \newfontfamily{\headfont}{$head_font}
-\titleformat{\section}{\Large\bfseries\headfont}{\thesection}{1em}{}
-\titleformat{\subsection}{\large\bfseries\headfont}{\thesubsection}{1em}{}
-\titleformat{\subsubsection}{\normalsize\bfseries\headfont}{\thesubsubsection}{1em}{}
-\titleformat{\paragraph}{\normalsize\bfseries\headfont}{\theparagraph}{1em}{}
-\titleformat{\subparagraph}{\normalsize\bfseries\headfont}{\thesubparagraph}{1em}{}
+\titleformat{\section}{\fontsize{24}{29}\selectfont\bfseries\headfont}{\thesection}{1em}{}
+\titleformat{\subsection}{\fontsize{21}{26}\selectfont\bfseries\headfont}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\fontsize{18}{22}\selectfont\bfseries\headfont}{\thesubsubsection}{1em}{}
+\titleformat{\paragraph}{\fontsize{15}{19}\selectfont\bfseries\headfont}{\theparagraph}{1em}{}
+\titleformat{\subparagraph}{\fontsize{13.5}{17}\selectfont\bfseries\headfont}{\thesubparagraph}{1em}{}
+\titlespacing*{\section}{0pt}{1.2em}{0.6em}
+\titlespacing*{\subsection}{0pt}{1.2em}{0.6em}
+\titlespacing*{\subsubsection}{0pt}{1.2em}{0.6em}
+\titlespacing*{\paragraph}{0pt}{1.2em}{0.6em}
+\titlespacing*{\subparagraph}{0pt}{1.2em}{0.6em}
 \newcommand{\useSymbolFont}[1]{%
   \IfFontExistsTF{#1}{%
     \newfontfamily{\symbolfont}{#1}%
@@ -245,8 +296,10 @@ $document_hooks
 
 
 def generate_css(config: FontConfig) -> str:
-    """Render the embedded CSS template with the configured main and mono fonts."""
-    return _CSS_TEMPLATE.substitute(main=config.main, mono=config.mono)
+    """Render the embedded CSS template with the configured main, head and mono fonts."""
+    return _CSS_TEMPLATE.substitute(
+        main=config.main, head=config.head, mono=config.mono
+    )
 
 
 def generate_latex_preamble(
@@ -288,15 +341,6 @@ _FULL_LUA_FILTER_TEMPLATE: Final[Template] = Template("""local symbol_blocks = {
 
 local RUBY_CJK_FONT = '$ruby_cjk_font'
 
-local function is_symbol(ch)
-  if ch:byte() < 0x80 then return false end
-  local n = utf8.codepoint(ch)
-  for _, r in ipairs(symbol_blocks) do
-    if n >= r[1] and n <= r[2] then return true end
-  end
-  return false
-end
-
 local cjk_blocks = {
   ja = {
     {0x3040, 0x30FF}, {0x31F0, 0x31FF}, {0xFF66, 0xFF9F},
@@ -320,6 +364,35 @@ local function char_class(ch)
     end
   end
   return 'latin'
+end
+
+local cjk_font_macros = { ja = 'cjkja', cn = 'cjkcn', tw = 'cjktw', hk = 'cjkhk', kr = 'cjkkr' }
+local cjk_mono_font_macros = { ja = 'cjkmja', cn = 'cjkmcn', tw = 'cjkmtw', hk = 'cjkmhk', kr = 'cjkmkr' }
+
+local function lang_to_cjk_key(lang)
+  if not lang then return nil end
+  lang = string.lower(lang)
+  if string.sub(lang, 1, 2) == 'zh' then
+    if lang == 'zh-hk' or lang == 'zh-hant-hk' or string.sub(lang, 1, 7) == 'zh-hant' or string.sub(lang, 1, 6) == 'zh-tw' or string.sub(lang, 1, 6) == 'zh-mo' then
+      return string.find(lang, 'hk') and 'hk' or 'tw'
+    end
+    return 'cn'
+  end
+  if string.sub(lang, 1, 2) == 'ko' then return 'kr' end
+  return 'ja'
+end
+
+local function strict_cjk_key(lang)
+  if not lang then return nil end
+  lang = string.lower(lang)
+  if string.sub(lang, 1, 2) == 'ja' then return 'ja' end
+  if string.sub(lang, 1, 2) == 'ko' then return 'kr' end
+  if string.sub(lang, 1, 2) == 'zh' then
+    if string.find(lang, 'hk') then return 'hk' end
+    if string.sub(lang, 1, 7) == 'zh-hant' or string.find(lang, 'tw') or string.find(lang, 'mo') then return 'tw' end
+    return 'cn'
+  end
+  return nil
 end
 
 local function wrap_scripts(text)
@@ -380,8 +453,16 @@ local hdr_walker = {
   end,
 }
 
-local function breakable_code(escaped)
-  local out = {}
+local SE_ANY = '\\\\penalty1000{}'
+
+local seps = {
+  ['-'] = true, ['/'] = true, ['='] = true, ['\\\\_'] = true,
+  ['('] = true, ['['] = true, ['\\\\{'] = true, ['\\\\textbackslash{}'] = true,
+  [','] = true, [':'] = true, [';'] = true,
+}
+
+local function tokenize(escaped)
+  local tokens = {}
   local i = 1
   local len = #escaped
   while i <= len do
@@ -410,9 +491,21 @@ local function breakable_code(escaped)
       end
       tok = escaped:sub(i, i + nb - 1)
     end
-    out[#out + 1] = tok
-    out[#out + 1] = '\\\\allowbreak{}'
+    tokens[#tokens + 1] = tok
     i = i + #tok
+  end
+  return tokens
+end
+
+local function breakable_code(escaped)
+  local out = {}
+  for _, tok in ipairs(tokenize(escaped)) do
+    local kind = SE_ANY
+    if tok == ' ' or seps[tok] then
+      kind = '\\\\allowbreak{}'
+    end
+    out[#out + 1] = tok
+    out[#out + 1] = kind
   end
   return table.concat(out)
 end
@@ -421,12 +514,38 @@ local function code_latex(el)
   return '\\\\texttt{' .. breakable_code(latex_escape_code(el.text)) .. '}'
 end
 
-local function code_emit(el) return pandoc.RawInline('latex', code_latex(el)) end
+local function code_emit(el)
+  local body = code_latex(el)
+  local lang = el.attributes and el.attributes['lang']
+  local key = strict_cjk_key(lang)
+  if key then
+    local macro = cjk_mono_font_macros[key] or 'cjkmja'
+    body = '{\\\\' .. macro .. '{' .. body .. '}}'
+  end
+  return pandoc.RawInline('latex', body)
+end
+
+local function code_block_latex(el)
+  local body = table.concat({
+    '\\\\begin{mdframed}[style=codelangbox]\\n',
+    '\\\\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]\\n',
+    el.text, '\\n',
+    '\\\\end{Verbatim}\\n',
+    '\\\\end{mdframed}'
+  })
+  local lang = (el.attributes and el.attributes['lang']) or (el.classes and el.classes[1])
+  local key = strict_cjk_key(lang)
+  if key then
+    local macro = cjk_mono_font_macros[key] or 'cjkmja'
+    body = '{\\\\' .. macro .. '{' .. body .. '}}'
+  end
+  return body
+end
 
 local body_walker = {
   Code = code_emit,
   HorizontalRule = function()
-    return pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{0.4pt}')
+    return pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{1.2pt}')
   end,
   Mark = function(el)
     return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
@@ -439,12 +558,21 @@ local function has_class(el, name)
   return classes[name] == true
 end
 
+local function breakable_text(escaped)
+  local out = {}
+  for _, tok in ipairs(tokenize(escaped)) do
+    out[#out + 1] = tok
+    out[#out + 1] = '\\\\allowbreak{}'
+  end
+  return table.concat(out)
+end
+
 local function latex_escape_text(s)
   s = s:gsub('\\\\', '\\\\textbackslash{}')
   s = s:gsub('([{}$$&#_%%%%])', '\\\\%%1')
   s = s:gsub('~', '\\\\textasciitilde{}')
   s = s:gsub('%%^', '\\\\textasciicircum{}')
-  return s
+  return breakable_text(s)
 end
 
 local inline_handlers = {
@@ -590,14 +718,24 @@ local function definition_list_latex(b)
   return '\\\\par\\\\smallskip ' .. table.concat(chunks, ' \\\\par\\\\smallskip ')
 end
 
-local function render_code_lang_block(label, code)
-  return table.concat({
+local function render_code_lang_block(label, code, lang)
+  local body = table.concat({
     '\\\\begin{mdframed}[style=codelangbox, frametitle={', label, '}]\\n',
     '\\\\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]\\n',
     code, '\\n',
     '\\\\end{Verbatim}\\n',
     '\\\\end{mdframed}'
   })
+  if not lang then
+    local n = label:gsub('/','')
+    if n ~= '' then lang = n end
+  end
+  local key = strict_cjk_key(lang)
+  if key then
+    local macro = cjk_mono_font_macros[key] or 'cjkmja'
+    body = '{\\\\' .. macro .. '{' .. body .. '}}'
+  end
+  return body
 end
 
 local function image_inline_latex(el)
@@ -644,16 +782,17 @@ function Pandoc(doc)
       if b.t == 'Div' and has_class(b, 'code-lang') then
         local label = pandoc.utils.stringify(b.content)
         if nb and nb.t == 'CodeBlock' then
-          out:insert(pandoc.RawBlock('latex', render_code_lang_block(label, nb.text)))
+          out:insert(pandoc.RawBlock('latex', render_code_lang_block(label, nb.text, nb.classes and nb.classes[1])))
           i = i + 2
         else
           out:insert(pandoc.RawBlock('latex', '\\\\noindent{\\\\small\\\\texttt{' .. label .. '}}\\\\par'))
           i = i + 1
         end
       elseif b.t == 'Table' then out:insert(pandoc.RawBlock('latex', table_latex(b))); i = i + 1
-      elseif b.t == 'HorizontalRule' then out:insert(pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{0.4pt}')); i = i + 1
+      elseif b.t == 'HorizontalRule' then out:insert(pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{1.2pt}')); i = i + 1
       elseif b.t == 'Figure' then out:insert(pandoc.RawBlock('latex', figure_latex(b))); i = i + 1
       elseif b.t == 'DefinitionList' then out:insert(pandoc.RawBlock('latex', definition_list_latex(b))); i = i + 1
+      elseif b.t == 'CodeBlock' then out:insert(pandoc.RawBlock('latex', code_block_latex(b))); i = i + 1
       else out:insert(pandoc.walk_block(b, body_walker)); i = i + 1 end
     end
   end
@@ -673,7 +812,22 @@ local function plain_text(inlines)
   return table.concat(parts)
 end
 
+function Link(el)
+  local lang = el.attributes['lang']
+  if lang and not el.attributes['rt'] then
+    local key = lang_to_cjk_key(lang)
+    local macro = cjk_font_macros[key] or 'cjkja'
+    return pandoc.RawInline('latex', '\\\\href{' .. el.target .. '}{{\\\\' .. macro .. '{' .. serialize_inlines(el.content) .. '}}}')
+  end
+end
+
 function Span(el)
+  local lang = el.attributes['lang']
+  if lang and not (el.attributes['rt']) then
+    local key = lang_to_cjk_key(lang)
+    local macro = cjk_font_macros[key] or 'cjkja'
+    return pandoc.RawInline('latex', '{\\\\' .. macro .. '{' .. serialize_inlines(el.content) .. '}}')
+  end
   local rt = el.attributes['rt']
   if rt then
     el.attributes['rt'] = nil
@@ -683,7 +837,7 @@ function Span(el)
     return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
   end
   if has_class(el, 'h6') then
-    return pandoc.RawInline('latex', '\\\\textbf{\\\\emph{\\\\headfont{' .. serialize_inlines(el.content) .. '}}}')
+    return pandoc.RawInline('latex', '\\\\textbf{\\\\emph{\\\\headfont{\\\\fontsize{12}{15}\\\\selectfont{' .. serialize_inlines(el.content) .. '}}}}')
   end
 end
 """)
@@ -901,6 +1055,8 @@ def _strip_image_titles(html: str) -> str:
 
 def _normalize_quotes(html: str) -> str:
     """Replace fancy typographic quotes with straight ASCII equivalents."""
+    html = html.replace("&ldquo;", '"').replace("&rdquo;", '"')
+    html = html.replace("&lsquo;", "'").replace("&rsquo;", "'")
     return html.translate(_QUOTES_TRANSLATION)
 
 
@@ -949,6 +1105,11 @@ def _is_full_document(html: str) -> bool:
 def _cjk_family_name(key: str) -> str:
     """Return the LaTeX/HTML family macro name for a CJK key."""
     return f"cjk{key}"
+
+
+def _cjk_mono_family_name(key: str) -> str:
+    """Return the LaTeX family macro name for a CJK mono (code) key."""
+    return f"cjkm{key}"
 
 
 def _strip_metadata_tags(html: str) -> str:
@@ -1007,7 +1168,17 @@ def _make_latex_header(
         )
         for k in CJK_FONT_KEYS
     )
-    cjk_font_settings = f"{_guard_font_set('setCJKmainfont', [cjk_fonts[main_cjk_key]])}\n{cjk_families}"
+    cjk_mono_families = "\n".join(
+        _guard_new_cjk_family(
+            _cjk_mono_family_name(k),
+            [config.cjk_mono.get(k, cjk_fonts[k]), config.cjk.get(k, "")],
+        )
+        for k in CJK_FONT_KEYS
+    )
+    cjk_font_settings = (
+        f"{_guard_font_set('setCJKmainfont', [cjk_fonts[main_cjk_key]])}\n"
+        f"{cjk_families}\n{cjk_mono_families}"
+    )
 
     return generate_latex_preamble(
         config=config,
@@ -1067,6 +1238,7 @@ def _pandoc_html_to_pdf(
             "-o",
             pdf_path,
             "--pdf-engine=xelatex",
+            "--variable=fontsize:12pt",
             "-H",
             header_path,
             "--lua-filter",
@@ -1088,6 +1260,133 @@ def _pandoc_html_to_pdf(
             os.unlink(lua_filter_path)
 
 
+def _wrap_block_lang(html: str) -> str:
+    """Wrap the inner content of any block with a CJK ``lang`` in a ``<span lang>``.
+
+    Pandoc only exposes a ``lang`` attribute to the Lua filter on inline ``Span``
+    elements, dropping it on block elements such as ``p``, ``li`` and
+    ``blockquote``. Nesting a ``<span lang=...>`` around the content preserves the
+    language so the filter can select the matching CJK font (matching the CSS
+    ``span[lang="*"]`` rules on any element, including blocks).
+    """
+    cjk_langs = ("ja", "zh-", "zh_", "ko")
+    block_tags = {
+        "p",
+        "li",
+        "dt",
+        "dd",
+        "td",
+        "th",
+        "figcaption",
+        "blockquote",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "div",
+        "figure",
+    }
+
+    def _is_cjk(lang: str | None) -> bool:
+        return bool(lang) and any(lang.lower().startswith(c) for c in cjk_langs)
+
+    class _LangRewriter(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=False)
+            self.out: list[str] = []
+            self._stack: list[tuple[str, str | None]] = []
+            self._wraps: list[bool] = []
+
+        def handle_starttag(
+            self, tag: str, attrs: list[tuple[str, str | None]]
+        ) -> None:
+            self._emit_raw("<", tag, self._attrs_string(attrs), ">")
+            if not self._is_void(tag):
+                lang = self._attr(attrs)
+                if tag.lower() in block_tags and _is_cjk(lang):
+                    self.out.append(f'<span lang="{lang}">')
+                    self._wraps.append(True)
+                else:
+                    self._wraps.append(False)
+                self._stack.append((tag, lang))
+
+        def handle_startendtag(
+            self, tag: str, attrs: list[tuple[str, str | None]]
+        ) -> None:
+            self._emit_raw("<", tag, self._attrs_string(attrs), "/>")
+
+        def handle_endtag(self, tag: str) -> None:
+            if self._stack:
+                pop_tag, _ = self._stack.pop()
+                wrapped = self._wraps.pop() if self._wraps else False
+                while pop_tag != tag and self._stack:
+                    # tolerate mismatched nesting: close any unclosed lang wraps
+                    pop_tag, _ = self._stack.pop()
+                    was_wrapped = self._wraps.pop() if self._wraps else False
+                    if was_wrapped:
+                        self.out.append("</span>")
+                    if pop_tag == tag:
+                        break
+                if wrapped:
+                    self.out.append("</span>")
+            self.out.append(f"</{tag}>")
+
+        def handle_data(self, data: str) -> None:
+            self.out.append(data)
+
+        def handle_entityref(self, name: str) -> None:
+            self.out.append(f"&{name};")
+
+        def handle_charref(self, name: str) -> None:
+            self.out.append(f"&#{name};")
+
+        @staticmethod
+        def _attr(attrs: list[tuple[str, str | None]]) -> str | None:
+            for k, v in attrs:
+                if k == "lang":
+                    return v
+            return None
+
+        @staticmethod
+        def _is_void(tag: str) -> bool:
+            return tag in {
+                "area",
+                "base",
+                "br",
+                "col",
+                "embed",
+                "hr",
+                "img",
+                "input",
+                "link",
+                "meta",
+                "param",
+                "source",
+                "track",
+                "wbr",
+            }
+
+        @staticmethod
+        def _attrs_string(attrs: list[tuple[str, str | None]]) -> str:
+            parts = []
+            for k, v in attrs:
+                if v is None:
+                    parts.append(k)
+                else:
+                    parts.append(f'{k}="{v}"')
+            return (" " + " ".join(parts)) if parts else ""
+
+        def _emit_raw(self, *parts: str) -> None:
+            self.out.append("".join(parts))
+
+    rewriter = _LangRewriter()
+    rewriter.feed(html)
+    rewriter.close()
+    return "".join(rewriter.out)
+
+
 def _process_html(
     html_body: str, source_dir: str | None, lang: str, config: FontConfig
 ) -> tuple[str, DocumentMetadata]:
@@ -1103,9 +1402,13 @@ def _process_html(
         full = _resolve_image_src(full, source_dir)
 
     full = _h6_to_bold_italic_para(
-        _ruby_to_span(
-            _strip_variation_selectors(
-                _strip_image_titles(_strip_footnote_backref(_normalize_quotes(full)))
+        _wrap_block_lang(
+            _ruby_to_span(
+                _strip_variation_selectors(
+                    _strip_image_titles(
+                        _strip_footnote_backref(_normalize_quotes(full))
+                    )
+                )
             )
         )
     )
