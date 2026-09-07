@@ -173,3 +173,28 @@ def test_convert_image_figure_caption(tmp_path: Path) -> None:
     assert "My Picture of a Cat" in text
     assert "Figure 1" not in text
     assert "Figure 2" not in text
+
+
+@needs_pandoc
+def test_convert_task_list_checkboxes(tmp_path: Path) -> None:
+    """Task-list checkboxes render via the symbol font (☑ checked, ☐ unchecked)."""
+    if shutil.which("pdffonts") is None:
+        pytest.skip("pdffonts not available")
+    md = "- [ ] todo\n- [x] done\n"
+    data = convert(md, None)
+    assert data is not None
+
+    pdf_path = tmp_path / "todo.pdf"
+    pdf_path.write_bytes(data)
+
+    text = _extract_text(pdf_path)
+    assert "todo" in text
+    assert "done" in text
+
+    fonts = subprocess.run(
+        ["pdffonts", str(pdf_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    assert "Symbola" in fonts

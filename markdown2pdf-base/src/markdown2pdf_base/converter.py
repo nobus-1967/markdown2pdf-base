@@ -135,6 +135,7 @@ _CSS_TEMPLATE: Final[Template] = Template("""
     ol { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
     ul { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
     li { position: relative; padding-left: 20px; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
+    ul li input[type="checkbox"] { margin-right: 4px; vertical-align: baseline; accent-color: #000000; opacity: 1; cursor: not-allowed; }
     dt { font-weight: bold; hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
     dd { position: relative; margin-left: 0; padding-left: 20px; font-style: italic; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
     code { padding: 2px 4px; border-radius: 4px; font-family: "$mono", "Liberation Mono", "Courier New", Courier, monospace; font-size: 0.9em; line-height: 1; hyphens: none !important; white-space: normal; word-break: break-all; overflow-wrap: anywhere; }
@@ -278,6 +279,10 @@ $cjk_font_settings
   }%
 }
 \useSymbolFont{$symbol_font}
+\makeatletter
+\newcommand{\checkboxchecked}{{\symbolfont\fontsize{\dimexpr\f@size pt-2pt\relax}{\f@size}\selectfont\char"2611}}
+\newcommand{\checkboxempty}{{\symbolfont\fontsize{\dimexpr\f@size pt-2pt\relax}{\f@size}\selectfont\char"2610}}
+\makeatother
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[C]{$header_title}
@@ -833,6 +838,10 @@ function Span(el)
     el.attributes['rt'] = nil
     return pandoc.RawInline('latex', '{\\\\CJKfontspec{' .. RUBY_CJK_FONT .. '}\\\\ruby{' .. plain_text(el.content) .. '}{' .. rt .. '}}')
   end
+  if has_class(el, 'task-check') then
+    local checked = el.attributes['data-checked'] == '1'
+    return pandoc.RawInline('latex', checked and '\\\\checkboxchecked{}' or '\\\\checkboxempty{}')
+  end
   if has_class(el, 'mark') then
     return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
   end
@@ -1077,6 +1086,27 @@ def _ruby_to_span(html: str) -> str:
         )
 
     return _RUBY_RE.sub(_convert_ruby, html)
+
+
+_CHECKBOX_INPUT_RE: Final[re.Pattern[str]] = re.compile(
+    r'<input\b[^>]*type="checkbox"[^>]*>', re.IGNORECASE
+)
+
+
+def _checkbox_to_span(html: str) -> str:
+    """Rewrite task-list ``<input type="checkbox">`` into a lang-safe ``span``.
+
+    Pandoc's HTML reader drops the empty ``<input>`` void element, so the checkbox
+    would vanish before reaching the Lua filter. Converting it to a ``<span
+    class="task-check" data-checked="...">`` (with placeholder content) preserves it
+    so the filter can render a checked/unchecked box.
+    """
+
+    def _convert(m: re.Match[str]) -> str:
+        state = "1" if re.search(r"\bchecked\b", m.group(0), re.IGNORECASE) else "0"
+        return f'<span class="task-check" data-checked="{state}">&#xa0;</span>'
+
+    return _CHECKBOX_INPUT_RE.sub(_convert, html)
 
 
 def _h6_to_bold_italic_para(html: str) -> str:
@@ -1402,11 +1432,13 @@ def _process_html(
         full = _resolve_image_src(full, source_dir)
 
     full = _h6_to_bold_italic_para(
-        _wrap_block_lang(
-            _ruby_to_span(
-                _strip_variation_selectors(
-                    _strip_image_titles(
-                        _strip_footnote_backref(_normalize_quotes(full))
+        _checkbox_to_span(
+            _wrap_block_lang(
+                _ruby_to_span(
+                    _strip_variation_selectors(
+                        _strip_image_titles(
+                            _strip_footnote_backref(_normalize_quotes(full))
+                        )
                     )
                 )
             )

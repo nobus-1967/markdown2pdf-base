@@ -6,7 +6,7 @@
     <meta name="description" content="Test Page for markdown2html5-base converter." />
     <meta name="keywords" content="markdown, html5" />
     <title>Test Page</title>
-    <meta name="published" content="2026-09-02" />
+    <meta name="published" content="2026-09-03" />
     <style>
 body {
   padding: 20px;
@@ -135,6 +135,13 @@ li {
   word-break: normal;
   overflow-wrap: break-word;
 }
+ul li input[type="checkbox"] {
+  margin-right: 4px;
+  vertical-align: baseline;
+  accent-color: #000000;
+  opacity: 1;
+  cursor: not-allowed;
+}
 dt {
   font-weight: bold;
   hyphens: auto;
@@ -225,7 +232,7 @@ span[lang="ko"] { font-family: "Noto Serif CJK KR", "Source Han Serif KR", "ë³¸ë
     </style>
   </head>
   <body>
-<!--Test Page, created for markdown2html5-base converter (ver. 0.5.0).-->
+<!--Test Page, created for markdown2html5-base converter (ver. 0.5.1).-->
 <h1>Heading 1</h1>
 <h2>Heading 2</h2>
 <h3>Heading 3</h3>
@@ -250,6 +257,12 @@ and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup>
   <li>Bird</li>
   <li>Chat</li>
   <li>Dog</li>
+</ul>
+<!-- -->
+<p>To-Do list:</p>
+<ul>
+  <li><input type="checkbox" disabled> Todo&hellip;</li>
+  <li><input type="checkbox" checked disabled> Done!</li>
 </ul>
 <!-- -->
 <p>Definition list:</p>
@@ -313,7 +326,7 @@ and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup>
   <hr>
   <ol>
     <li id="fn:1">This is a footnote. <a href="#fnref:1" class="footnote-backref">&uarr;</a></li>
-    <li id="fn:2">2026-09-02 08:00 <a href="#fnref:2" class="footnote-backref">&uarr;</a></li>
+    <li id="fn:2">2026-09-03 12:00 <a href="#fnref:2" class="footnote-backref">&uarr;</a></li>
   </ol>
 </div>
   </body>
