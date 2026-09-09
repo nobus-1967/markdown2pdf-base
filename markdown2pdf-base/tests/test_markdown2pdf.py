@@ -180,7 +180,7 @@ def test_convert_task_list_checkboxes(tmp_path: Path) -> None:
     """Task-list checkboxes render via the symbol font (☑ checked, ☐ unchecked)."""
     if shutil.which("pdffonts") is None:
         pytest.skip("pdffonts not available")
-    md = "- [ ] todo\n- [x] done\n"
+    md = "- [ ] todo\n- [x] done\n1. [ ] one\n2. [x] two\n"
     data = convert(md, None)
     assert data is not None
 
@@ -190,6 +190,8 @@ def test_convert_task_list_checkboxes(tmp_path: Path) -> None:
     text = _extract_text(pdf_path)
     assert "todo" in text
     assert "done" in text
+    assert "one" in text
+    assert "two" in text
 
     fonts = subprocess.run(
         ["pdffonts", str(pdf_path)],

@@ -4,10 +4,10 @@ title: Test Page
 author: nobus-1967
 description: Test Page for markdown2html5-base converter.
 keywords: markdown, html5
-published: 2026-09-03
+published: 2026-09-09
 ---
 
-[Test Page, created for markdown2html5-base converter (ver. 0.5.1).]: #
+[Test Page, created for markdown2html5-base converter (ver. 0.5.2).]: #
 
 # Heading 1
 
@@ -40,14 +40,19 @@ Lists are ordered:
 
 or unordered:
 
-* Bird
-* Chat
-* Dog
+- Bird
+- Chat
+- Dog
 
-To-Do list:
+To-Do lists are ordered:
 
-- [ ] Todo...
-- [x] Done!
+1. [ ] Todo...
+2. [x] Done!
+
+or unordered:
+
+- [ ] Not complete yet...
+- [x] Complete!
 
 Definition list:
 
@@ -94,4 +99,4 @@ This \*not italic\* is escaped by \\.
 
 [^1]: This is a footnote.
 
-[^2]: 2026-09-03 12:00
+[^2]: 2026-09-09 12:00

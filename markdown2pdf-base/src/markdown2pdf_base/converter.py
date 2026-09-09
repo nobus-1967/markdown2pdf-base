@@ -135,7 +135,7 @@ _CSS_TEMPLATE: Final[Template] = Template("""
     ol { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
     ul { hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
     li { position: relative; padding-left: 20px; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
-    ul li input[type="checkbox"] { margin-right: 4px; vertical-align: baseline; accent-color: #000000; opacity: 1; cursor: not-allowed; }
+    ol li input[type="checkbox"], ul li input[type="checkbox"] { vertical-align: baseline; accent-color: #000000; opacity: 1; cursor: not-allowed; }
     dt { font-weight: bold; hyphens: auto; word-break: break-word; overflow-wrap: anywhere; }
     dd { position: relative; margin-left: 0; padding-left: 20px; font-style: italic; hyphens: auto; hyphenate-limit-chars: 6 3 3; word-break: normal; overflow-wrap: break-word; }
     code { padding: 2px 4px; border-radius: 4px; font-family: "$mono", "Liberation Mono", "Courier New", Courier, monospace; font-size: 0.9em; line-height: 1; hyphens: none !important; white-space: normal; word-break: break-all; overflow-wrap: anywhere; }
