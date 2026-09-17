@@ -8,7 +8,7 @@ The generated PDF file matches the HTML5 document with the built-in styles (used
 
 All markdown2html5-base features are supported:
 
-- Headings (H1–H6) with custom IDs
+- Headings (H1–H6) with custom IDs, including TOC
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline
 - Inline code and fenced code blocks
 - Links and images (relative paths resolved automatically)
@@ -37,7 +37,7 @@ You can also evaluate the results using CLI: `markdown2pdf-base input.md -o outp
 
 ## Requirements
 
-- `markdown2html5-base` >= 0.5.2;
+- `markdown2html5-base` >= 0.5.3;
 - `pandoc` with Lua filter support;
 - `xelatex` (TeX Live);
 - `Noto` and `Symbola` fonts (see [README](./markdown2pdf-base/README.md) for details).

@@ -9,15 +9,13 @@ Lua filter and LaTeX preamble to faithfully reproduce the HTML layout
 
 from __future__ import annotations
 
-import functools
 import os
 import re
 import subprocess
 import sys
 import tempfile
-import warnings
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from html.parser import HTMLParser
 from string import Template
 from typing import Any, Final
@@ -186,6 +184,7 @@ _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
 \usepackage{longtable}
 \setlength{\LTleft}{0pt}
 \setlength{\LTright}{\fill}
+\setlength{\LTpost}{0pt}
 \usepackage{array}
 \renewcommand{\arraystretch}{1.5}
 \usepackage{xltabular}
@@ -201,7 +200,7 @@ _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
   backgroundcolor=shadecolor,
   innertopmargin=4pt, innerbottommargin=4pt,
   innerleftmargin=6pt, innerrightmargin=6pt,
-  skipabove=6pt, skipbelow=6pt,
+  skipabove=14pt, skipbelow=0pt,
 }
 \makeatletter
 \newenvironment{ShadedVerbatim}{%
@@ -217,8 +216,8 @@ _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
   \begin{mdframed}[leftline=true, rightline=false, topline=false, bottomline=false,
     linecolor=shadecolor, linewidth=10pt,
     innerleftmargin=20pt, innerrightmargin=0pt,
-    innertopmargin=4pt, innerbottommargin=4pt,
-    leftmargin=0pt, rightmargin=0pt, skipabove=6pt, skipbelow=6pt]
+    innertopmargin=4pt, innerbottommargin=0pt,
+    leftmargin=0pt, rightmargin=0pt, skipabove=9pt, skipbelow=5pt]
 }{%
   \end{mdframed}%
 }
@@ -236,13 +235,17 @@ _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
     \@tempdima=\dimexpr\@tempdima * \linewidth / \@tempdimb\relax
     \@tempdimb=\linewidth
   \fi
-  \resizebox{\@tempdimb}{\@tempdima}{#1}%
+  \edef\pandoc@wd{\the\@tempdimb}%
+  \edef\pandoc@ht{\the\@tempdima}%
+  \resizebox{\pandoc@wd}{\pandoc@ht}{#1}%
   \endgroup
 }
 \makeatother
+\tolerance=3000
 \emergencystretch=1.5em
 \hyphenpenalty=10000
 \exhyphenpenalty=10000
+\RaggedRight
 \usepackage{soul}
 \sethlcolor{shadecolor}
 \soulregister{\textless}{1}
@@ -459,11 +462,13 @@ local hdr_walker = {
 }
 
 local SE_ANY = '\\\\penalty1000{}'
+local SE_PUNCT = '\\\\penalty500{}'
 
 local seps = {
   ['-'] = true, ['/'] = true, ['='] = true, ['\\\\_'] = true,
   ['('] = true, ['['] = true, ['\\\\{'] = true, ['\\\\textbackslash{}'] = true,
   [','] = true, [':'] = true, [';'] = true,
+  ['.'] = true, ['!'] = true, ['?'] = true,
 }
 
 local function tokenize(escaped)
@@ -506,8 +511,10 @@ local function breakable_code(escaped)
   local out = {}
   for _, tok in ipairs(tokenize(escaped)) do
     local kind = SE_ANY
-    if tok == ' ' or seps[tok] then
+    if tok == ' ' then
       kind = '\\\\allowbreak{}'
+    elseif seps[tok] then
+      kind = SE_PUNCT
     end
     out[#out + 1] = tok
     out[#out + 1] = kind
@@ -519,32 +526,51 @@ local function code_latex(el)
   return '\\\\texttt{' .. breakable_code(latex_escape_code(el.text)) .. '}'
 end
 
+local function after_spacing(body, slack)
+  if not slack then return body .. '\\n\\\\par' end
+  return body .. '\\n\\\\par\\\\vspace{3pt}'
+end
+
+local function cjk_mono_wrap(body, key)
+  if not key then return body end
+  local macro = cjk_mono_font_macros[key] or 'cjkmja'
+  return '{\\\\' .. macro .. '{' .. body .. '}}'
+end
+
+local function code_box(code, title)
+  local opts = 'style=codelangbox'
+  if title then opts = opts .. ', frametitle={' .. title .. '}' end
+  return table.concat({
+    '\\\\begin{mdframed}[' .. opts .. ']\\n',
+    '\\\\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]\\n',
+    code, '\\n',
+    '\\\\end{Verbatim}\\n',
+    '\\\\end{mdframed}\\\\vspace{5pt}'
+  })
+end
+
 local function code_emit(el)
   local body = code_latex(el)
   local lang = el.attributes and el.attributes['lang']
-  local key = strict_cjk_key(lang)
-  if key then
-    local macro = cjk_mono_font_macros[key] or 'cjkmja'
-    body = '{\\\\' .. macro .. '{' .. body .. '}}'
-  end
-  return pandoc.RawInline('latex', body)
+  return pandoc.RawInline('latex', cjk_mono_wrap(body, strict_cjk_key(lang)))
 end
 
 local function code_block_latex(el)
-  local body = table.concat({
-    '\\\\begin{mdframed}[style=codelangbox]\\n',
-    '\\\\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]\\n',
-    el.text, '\\n',
-    '\\\\end{Verbatim}\\n',
-    '\\\\end{mdframed}'
-  })
+  local body = code_box(el.text)
   local lang = (el.attributes and el.attributes['lang']) or (el.classes and el.classes[1])
-  local key = strict_cjk_key(lang)
-  if key then
-    local macro = cjk_mono_font_macros[key] or 'cjkmja'
-    body = '{\\\\' .. macro .. '{' .. body .. '}}'
-  end
-  return body
+  return cjk_mono_wrap(body, strict_cjk_key(lang))
+end
+
+local escape_nobreak
+local inline_nobreak
+local serialize_nobreak
+
+local function latex_escape_chars(s)
+  s = s:gsub('\\\\', '\\\\textbackslash{}')
+  s = s:gsub('([{}$$&#_%%%%])', '\\\\%%1')
+  s = s:gsub('~', '\\\\textasciitilde{}')
+  s = s:gsub('%%^', '\\\\textasciicircum{}')
+  return s
 end
 
 local body_walker = {
@@ -553,7 +579,7 @@ local body_walker = {
     return pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{1.2pt}')
   end,
   Mark = function(el)
-    return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
+    return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_nobreak(el.content) .. '}')
   end,
 }
 
@@ -563,21 +589,52 @@ local function has_class(el, name)
   return classes[name] == true
 end
 
+local function is_wide_char(tok)
+  local b = tok:byte()
+  return b ~= nil and b >= 224
+end
+
 local function breakable_text(escaped)
   local out = {}
   for _, tok in ipairs(tokenize(escaped)) do
-    out[#out + 1] = tok
-    out[#out + 1] = '\\\\allowbreak{}'
+    if tok == ' ' or is_wide_char(tok) then
+      out[#out + 1] = tok
+      out[#out + 1] = '\\\\allowbreak{}'
+    elseif seps[tok] then
+      out[#out + 1] = tok
+      out[#out + 1] = SE_PUNCT
+    else
+      out[#out + 1] = tok
+    end
   end
   return table.concat(out)
 end
 
 local function latex_escape_text(s)
-  s = s:gsub('\\\\', '\\\\textbackslash{}')
-  s = s:gsub('([{}$$&#_%%%%])', '\\\\%%1')
-  s = s:gsub('~', '\\\\textasciitilde{}')
-  s = s:gsub('%%^', '\\\\textasciicircum{}')
-  return breakable_text(s)
+  return breakable_text(latex_escape_chars(s))
+end
+
+escape_nobreak = function(s)
+  return latex_escape_chars(s)
+end
+
+inline_nobreak = function(inl)
+  local t = inl.t
+  if t == 'Str' then return escape_nobreak(inl.text) end
+  if t == 'RawInline' then return inl.text end
+  if t == 'Code' then return code_latex(inl) end
+  if t == 'Space' or t == 'SoftBreak' then return ' ' end
+  if t == 'Strong' then return '\\\\textbf{' .. serialize_nobreak(inl.content) .. '}' end
+  if t == 'Emph' then return '\\\\emph{' .. serialize_nobreak(inl.content) .. '}' end
+  if t == 'Mark' then return '\\\\markhl{' .. serialize_nobreak(inl.content) .. '}' end
+  if t == 'Link' then return '\\\\href{' .. inl.target .. '}{' .. serialize_nobreak(inl.content) .. '}' end
+  return pandoc.utils.stringify(inl)
+end
+
+serialize_nobreak = function(inlines)
+  local out = {}
+  for i = 1, #inlines do out[i] = inline_nobreak(inlines[i]) end
+  return table.concat(out)
 end
 
 local inline_handlers = {
@@ -588,7 +645,7 @@ local inline_handlers = {
   SoftBreak = function() return ' ' end,
   Strong = function(inl) return '\\\\textbf{' .. serialize_inlines(inl.content) .. '}' end,
   Emph = function(inl) return '\\\\emph{' .. serialize_inlines(inl.content) .. '}' end,
-  Mark = function(inl) return '\\\\markhl{' .. serialize_inlines(inl.content) .. '}' end,
+  Mark = function(inl) return '\\\\markhl{' .. serialize_nobreak(inl.content) .. '}' end,
   Link = function(inl) return '\\\\href{' .. inl.target .. '}{' .. serialize_inlines(inl.content) .. '}' end,
 }
 
@@ -642,34 +699,64 @@ local function cell_needs_wrap(cell)
   return false
 end
 
+local function est_width(s)
+  local w = 0
+  local i = 1
+  while i <= #s do
+    local b = s:byte(i)
+    local nb = 1
+    if b and b >= 240 then nb = 4 elseif b and b >= 224 then nb = 3 elseif b and b >= 192 then nb = 2 end
+    if b and b < 128 then
+      w = w + ((s:sub(i, i) == ' ') and 0.25 or 0.5)
+    else
+      w = w + (nb >= 3 and 1.0 or 0.5)
+    end
+    i = i + nb
+  end
+  return w
+end
+
+local function cell_width(cell)
+  local w = 0
+  for _, blk in ipairs(cell.contents) do
+    if blk.t == 'Para' or blk.t == 'Plain' then
+      w = w + est_width(pandoc.utils.stringify(blk.content))
+    end
+  end
+  return w
+end
+
+local MAX_TABLE_EM = 36
+
 local function table_latex(tbl)
   local ncols = #tbl.colspecs
-  local wrap = {}
-  for i = 1, ncols do wrap[i] = false end
-  
+  local colwide = {}
+  for i = 1, ncols do colwide[i] = 0 end
+  local any_long = false
+
   local function scan_rows(rows)
     for _, row in ipairs(rows) do
       for ci, cell in ipairs(row.cells) do
-        if cell_needs_wrap(cell) then wrap[ci] = true end
+        local cw = cell_width(cell)
+        if cw > colwide[ci] then colwide[ci] = cw end
+        if cell_needs_wrap(cell) then any_long = true end
       end
     end
   end
-  
+
   if tbl.head then scan_rows(tbl.head.rows) end
   if tbl.foot then scan_rows(tbl.foot.rows) end
   for _, b in ipairs(tbl.bodies) do scan_rows(b.body) end
 
+  local total = 0
+  for i = 1, ncols do total = total + colwide[i] end
+  local any_x = any_long or total > MAX_TABLE_EM
+
   local spec = {}
-  local any_x = false
   for i, cs in ipairs(tbl.colspecs) do
-    if wrap[i] then
-      any_x = true
-      local xc = (cs == 'AlignCenter') and 'C' or ((cs == 'AlignRight') and 'R' or 'L')
-      spec[#spec + 1] = '|' .. xc
-    else
-      local achar = (cs == 'AlignCenter') and 'c' or ((cs == 'AlignRight') and 'r' or 'l')
-      spec[#spec + 1] = '|' .. achar
-    end
+    local xchar = (cs == 'AlignCenter') and 'C' or ((cs == 'AlignRight') and 'R' or 'L')
+    local achar = (cs == 'AlignCenter') and 'c' or ((cs == 'AlignRight') and 'r' or 'l')
+    spec[#spec + 1] = '|' .. (any_x and xchar or achar)
   end
   spec[#spec + 1] = '|'
   local colspec = table.concat(spec)
@@ -695,17 +782,21 @@ local function table_latex(tbl)
   end
   
   for _, b in ipairs(tbl.bodies) do
-    for _, row in ipairs(b.body) do out[#out + 1] = '\\\\hline ' .. row_latex(row, nil) end
+    for i, row in ipairs(b.body) do
+      local pre = (i == 1 and #head_rows > 0) and '' or '\\\\hline '
+      out[#out + 1] = pre .. row_latex(row, nil)
+    end
   end
   
   if #foot_rows == 0 and #out > 0 then out[#out] = out[#out] .. '\\\\hline' end
   out[#out + 1] = any_x and '\\\\end{xltabular}' or '\\\\end{longtable}'
-  return table.concat(out, '\\n')
+  return after_spacing(table.concat(out, '\\n'), false)
 end
 
-local function definition_list_latex(b)
+local function definition_list_latex(items)
   local chunks = {}
-  for _, item in ipairs(b.content) do
+  local head_defs = ''
+  for idx, item in ipairs(items) do
     local defs = {}
     for _, def in ipairs(item[2]) do
       local def_parts = {}
@@ -718,34 +809,39 @@ local function definition_list_latex(b)
       end
       defs[#defs + 1] = '\\\\hspace*{1.5em}{\\\\itshape ' .. table.concat(def_parts, ' ') .. '}\\\\par'
     end
-    chunks[#chunks + 1] = '\\\\textbf{' .. serialize_inlines(item[1]) .. '}\\\\par' .. table.concat(defs, ' ')
+    if idx == 1 then
+      chunks[1] = '\\\\textbf{' .. serialize_inlines(item[1]) .. '}\\\\par'
+      head_defs = table.concat(defs, ' ')
+    else
+      chunks[#chunks + 1] = '\\\\textbf{' .. serialize_inlines(item[1]) .. '}\\\\par' .. table.concat(defs, ' ')
+    end
   end
-  return '\\\\par\\\\smallskip ' .. table.concat(chunks, ' \\\\par\\\\smallskip ')
+  if not chunks[2] then return '\\\\vspace{3pt}' .. chunks[1] .. '\\\\begingroup\\\\parskip0pt ' .. head_defs .. '\\\\endgroup' end
+  return '\\\\vspace{3pt}' .. chunks[1] .. '\\\\begingroup\\\\parskip0pt ' .. head_defs .. ' ' .. table.concat(chunks, ' ', 2) .. '\\\\endgroup'
 end
 
 local function render_code_lang_block(label, code, lang)
-  local body = table.concat({
-    '\\\\begin{mdframed}[style=codelangbox, frametitle={', label, '}]\\n',
-    '\\\\begin{Verbatim}[frame=none, breaklines, breaksymbolleft={}, vspace=0pt]\\n',
-    code, '\\n',
-    '\\\\end{Verbatim}\\n',
-    '\\\\end{mdframed}'
-  })
   if not lang then
     local n = label:gsub('/','')
     if n ~= '' then lang = n end
   end
-  local key = strict_cjk_key(lang)
-  if key then
-    local macro = cjk_mono_font_macros[key] or 'cjkmja'
-    body = '{\\\\' .. macro .. '{' .. body .. '}}'
-  end
-  return body
+  return cjk_mono_wrap(code_box(code, label), strict_cjk_key(lang))
+end
+
+local function percent_decode(s)
+  local out = s:gsub('%%(%x%x)', function(hex) return string.char(tonumber(hex, 16)) end)
+  return out
+end
+
+local function escape_image_src(s)
+  local src = percent_decode(s)
+  src = src:gsub('%%', '\\\\%%')
+  return src
 end
 
 local function image_inline_latex(el)
-  local src = el.src
-  local alt = pandoc.utils.stringify(el.caption)
+  local src = escape_image_src(el.src)
+  local alt = latex_escape_chars(pandoc.utils.stringify(el.caption))
   if src:sub(1, 5) == 'data:' then
     if alt == '' then alt = 'image' end
     return pandoc.RawInline('latex', '{\\\\itshape [' .. alt .. ']}')
@@ -764,7 +860,7 @@ local function figure_latex(fig)
   local out = { '\\\\noindent', table.concat(im, '\\\\par\\\\smallskip\\\\par') }
   if cap ~= '' then out[#out + 1] = '\\\\par\\n{\\\\itshape ' .. cap .. '}' end
   out[#out + 1] = '\\n\\\\par'
-  return table.concat(out)
+  return after_spacing(table.concat(out))
 end
 
 function Pandoc(doc)
@@ -779,7 +875,11 @@ function Pandoc(doc)
         local res = pandoc.walk_inline(b.content[j], hdr_walker)
         if res.tag then cc:insert(res) else for k = 1, #res do cc:insert(res[k]) end end
       end
-      b.content = cc
+      if b.level == 2 and b.identifier == 'toc' then
+        b.content = pandoc.List{pandoc.RawInline('latex', '\\\\textit{' .. serialize_inlines(cc) .. '}')}
+      else
+        b.content = cc
+      end
       out:insert(b)
       i = i + 1
     else
@@ -796,9 +896,22 @@ function Pandoc(doc)
       elseif b.t == 'Table' then out:insert(pandoc.RawBlock('latex', table_latex(b))); i = i + 1
       elseif b.t == 'HorizontalRule' then out:insert(pandoc.RawBlock('latex', '\\\\noindent\\\\rule{\\\\linewidth}{1.2pt}')); i = i + 1
       elseif b.t == 'Figure' then out:insert(pandoc.RawBlock('latex', figure_latex(b))); i = i + 1
-      elseif b.t == 'DefinitionList' then out:insert(pandoc.RawBlock('latex', definition_list_latex(b))); i = i + 1
+      elseif b.t == 'DefinitionList' then
+        local items = {}
+        for _, it in ipairs(b.content) do items[#items + 1] = it end
+        while doc.blocks[i + 1] and doc.blocks[i + 1].t == 'DefinitionList' do
+          i = i + 1
+          for _, it in ipairs(doc.blocks[i].content) do items[#items + 1] = it end
+        end
+        out:insert(pandoc.RawBlock('latex', definition_list_latex(items)))
+        i = i + 1
       elseif b.t == 'CodeBlock' then out:insert(pandoc.RawBlock('latex', code_block_latex(b))); i = i + 1
-      else out:insert(pandoc.walk_block(b, body_walker)); i = i + 1 end
+      else
+        if b.t == 'BulletList' or b.t == 'OrderedList' then
+          out:insert(pandoc.RawBlock('latex', '\\\\kern3pt'))
+        end
+        out:insert(pandoc.walk_block(b, body_walker)); i = i + 1
+      end
     end
   end
   doc.blocks = out
@@ -843,7 +956,7 @@ function Span(el)
     return pandoc.RawInline('latex', checked and '\\\\checkboxchecked{}' or '\\\\checkboxempty{}')
   end
   if has_class(el, 'mark') then
-    return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_inlines(el.content) .. '}')
+    return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_nobreak(el.content) .. '}')
   end
   if has_class(el, 'h6') then
     return pandoc.RawInline('latex', '\\\\textbf{\\\\emph{\\\\headfont{\\\\fontsize{12}{15}\\\\selectfont{' .. serialize_inlines(el.content) .. '}}}}')
@@ -946,49 +1059,6 @@ def _make_running_header(metadata: DocumentMetadata) -> str:
     return " ".join(parts)
 
 
-@functools.lru_cache(maxsize=1)
-def _get_installed_fonts() -> set[str]:
-    """Return the set of font family names installed on the system (via ``fc-list``)."""
-    try:
-        result = subprocess.run(
-            ["fc-list", ":", "family"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=15,
-        )
-        if result.returncode == 0:
-            fonts = set()
-            for line in result.stdout.splitlines():
-                if ":" in line:
-                    families_part = line.split(":", 1)[1]
-                    for family in families_part.split(","):
-                        fonts.add(family.strip().lower())
-            return fonts
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    return set()
-
-
-def _font_available(family: str) -> bool:
-    """Return whether the given font family is installed (assumes available if unknown)."""
-    installed = _get_installed_fonts()
-    return family.lower() in installed if installed else True
-
-
-def _select_font(family: str, fallbacks: Sequence[str]) -> str:
-    """Return the first available font from ``family`` followed by its fallbacks."""
-    chain = [family] + [f for f in fallbacks if f != family]
-    for name in chain:
-        if _font_available(name):
-            if name != family:
-                warnings.warn(
-                    f"Font '{family}' not found; using '{name}' instead.", stacklevel=3
-                )
-            return name
-    return family
-
-
 def _build_fallback_chain(
     chain: Sequence[str], cmd_factory: Callable[[str], str]
 ) -> str:
@@ -1008,10 +1078,12 @@ def _build_fallback_chain(
 
 
 def _guard_font_set(set_command: str, chain: list[str]) -> str:
+    """Emit a font-setting command guarded by an ``\\IfFontExistsTF`` fallback chain."""
     return _build_fallback_chain(chain, lambda name: f"\\{set_command}{{{name}}}")
 
 
 def _guard_new_cjk_family(family: str, chain: list[str]) -> str:
+    """Emit a ``\\newCJKfontfamily`` declaration guarded by a fallback chain."""
     return _build_fallback_chain(
         chain, lambda name: f"\\newCJKfontfamily{{\\{family}}}{{{name}}}"
     )
@@ -1038,6 +1110,7 @@ def _resolve_image_src(html: str, source_dir: str) -> str:
     """Resolve relative image ``src`` paths against ``source_dir``, keeping absolute URLs."""
 
     def _abs(m: re.Match[str]) -> str:
+        """Rewrite one ``src`` attribute, resolving it unless it is already absolute."""
         src = m.group(1)
         if src.startswith(("http://", "https://", "data:", "/")):
             return m.group(0)
@@ -1078,6 +1151,7 @@ def _ruby_to_span(html: str) -> str:
     """Rewrite ``<ruby>`` ruby markup into a ``<span class="ruby" rt="...">`` form."""
 
     def _convert_ruby(m: re.Match[str]) -> str:
+        """Rewrite one ``<ruby>`` match or pass it through unchanged if it has no pair."""
         match = _RUBY_INNER_RE.match(m.group(1).strip())
         return (
             f'<span class="ruby" rt="{match.group(2)}">{match.group(1)}</span>'
@@ -1103,6 +1177,7 @@ def _checkbox_to_span(html: str) -> str:
     """
 
     def _convert(m: re.Match[str]) -> str:
+        """Emit the lang-safe checkbox ``span`` for one ``<input>`` match."""
         state = "1" if re.search(r"\bchecked\b", m.group(0), re.IGNORECASE) else "0"
         return f'<span class="task-check" data-checked="{state}">&#xa0;</span>'
 
@@ -1149,7 +1224,7 @@ def _strip_metadata_tags(html: str) -> str:
 
 
 # ===========================================================================
-# Document Assembly & Thread-Safe Engine Hooks
+# Document Assembly
 # ===========================================================================
 
 
@@ -1320,9 +1395,12 @@ def _wrap_block_lang(html: str) -> str:
     }
 
     def _is_cjk(lang: str | None) -> bool:
+        """Return ``True`` if the language code selects a CJK script."""
         return bool(lang) and any(lang.lower().startswith(c) for c in cjk_langs)
 
     class _LangRewriter(HTMLParser):
+        """Re-emit HTML verbatim, wrapping CJK block content in ``<span lang>`` tags."""
+
         def __init__(self) -> None:
             super().__init__(convert_charrefs=False)
             self.out: list[str] = []
@@ -1417,6 +1495,19 @@ def _wrap_block_lang(html: str) -> str:
     return "".join(rewriter.out)
 
 
+# Ordered HTML post-processing transforms, applied in sequence to the full document.
+_HTML_TRANSFORMS: Final[tuple[Callable[[str], str], ...]] = (
+    _normalize_quotes,
+    _strip_footnote_backref,
+    _strip_image_titles,
+    _strip_variation_selectors,
+    _ruby_to_span,
+    _wrap_block_lang,
+    _checkbox_to_span,
+    _h6_to_bold_italic_para,
+)
+
+
 def _process_html(
     html_body: str, source_dir: str | None, lang: str, config: FontConfig
 ) -> tuple[str, DocumentMetadata]:
@@ -1430,20 +1521,8 @@ def _process_html(
 
     if source_dir:
         full = _resolve_image_src(full, source_dir)
-
-    full = _h6_to_bold_italic_para(
-        _checkbox_to_span(
-            _wrap_block_lang(
-                _ruby_to_span(
-                    _strip_variation_selectors(
-                        _strip_image_titles(
-                            _strip_footnote_backref(_normalize_quotes(full))
-                        )
-                    )
-                )
-            )
-        )
-    )
+    for transform in _HTML_TRANSFORMS:
+        full = transform(full)
     return full, metadata
 
 
@@ -1490,23 +1569,16 @@ def convert(
         base_cjk[main_cjk_key] = cjk_font
 
     config = FontConfig(
-        main=_select_font(main_font or DEFAULT_MAIN_FONT, []),
-        head=_select_font(head_font or DEFAULT_HEAD_FONT, []),
-        mono=_select_font(mono_font or DEFAULT_MONO_FONT, []),
-        symbol=_select_font(symbol_font or DEFAULT_SYMBOL_FONT, []),
-        cjk={k: _select_font(base_cjk[k], []) for k in CJK_FONT_KEYS},
+        main=main_font or DEFAULT_MAIN_FONT,
+        head=head_font or DEFAULT_HEAD_FONT,
+        mono=mono_font or DEFAULT_MONO_FONT,
+        symbol=symbol_font or DEFAULT_SYMBOL_FONT,
+        cjk=dict(base_cjk),
     )
 
     full_html, metadata = _process_html(html_body, source_dir, doc_lang, config)
     if not metadata.lang:
-        metadata = DocumentMetadata(
-            title=metadata.title,
-            author=metadata.author,
-            description=metadata.description,
-            keywords=metadata.keywords,
-            lang=doc_lang,
-            published=metadata.published,
-        )
+        metadata = replace(metadata, lang=doc_lang)
 
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".html", delete=False, encoding="utf-8"

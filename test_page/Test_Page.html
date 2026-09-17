@@ -6,7 +6,7 @@
     <meta name="description" content="Test Page for markdown2html5-base converter." />
     <meta name="keywords" content="markdown, html5" />
     <title>Test Page</title>
-    <meta name="published" content="2026-09-09" />
+    <meta name="published" content="2026-09-17" />
     <style>
 body {
   padding: 20px;
@@ -38,6 +38,7 @@ h2 {
   overflow-wrap: break-word;
   text-wrap: balance;
 }
+h2#toc { font-style: italic; }
 h3 {
   margin-top: 1.2em;
   margin-bottom: 0.6em;
@@ -204,7 +205,7 @@ div.code-lang {
   color: #ffffff;
   font-weight: bold;
 }
-table { margin: 20px 0; border-collapse: collapse; }
+table { margin-top: 32pt; border-collapse: collapse; }
 th { padding: 10px 12px; border: 1px solid #000000; font-weight: bold; }
 td { padding: 10px 12px; border: 1px solid #000000; }
 thead tr { background-color: #000000; color: #ffffff; }
@@ -231,19 +232,33 @@ span[lang="ko"] { font-family: "Noto Serif CJK KR", "Source Han Serif KR", "본�
     </style>
   </head>
   <body>
-<!--Test Page, created for markdown2html5-base converter (ver. 0.5.2).-->
+<!--Test Page, created for markdown2html5-base converter (ver. 0.5.3).-->
 <h1>Heading 1</h1>
-<h2>Heading 2</h2>
-<h3>Heading 3</h3>
+<!--TOC: Begin-->
+<h2 id="toc">Table of Contents</h2>
+<ul>
+  <li><a href="#h2-1">Heading 2</a></li>
+  <li><a href="#h3-1">Heading 3</a></li>
+  <li><a href="#h6-1">Heading 6: Formatting the text</a></li>
+  <li><a href="#h6-2">Blocks of text</a></li>
+  <li><a href="#h6-3">Test Russian symbols</a></li>
+  <li><a href="#others">Others</a></li>
+</ul>
+<!-- -->
+<!--TOC: End-->
 <hr>
-<h6>Heading 6: Formatting the text</h6>
+<h2 id="h2-1">Heading 2</h2>
+<p>This is a test page.</p>
+<h3 id="h3-1">Heading 3</h3>
+<p>This page was created for <code>markdown2html5-base</code> converter (ver. 0.5.3).</p>
+<h6 id="h6-1">Heading 6: Formatting the text</h6>
 <p>This is a paragraph. Any text may be <strong>bold</strong>, <em>italic</em>, <u>underlined</u>, <s>strikethrough (deleted)</s>.</p>
 <p>The text may also be <mark>marked (highlighted)</mark>. And this is <code>a piece of something looks like an inline code</code> inside a regular paragraph.</p>
 <p>You can use superscript (X<sub>2</sub>) or subscript (H<sup>2</sup>O) symbols.</p>
 <p>And you can add hyperlinks like <a href="https://www.markdownguide.org/">Markdown Guide</a>, footnotes<sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup> (LINE BREAK)<br />
 and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup></p>
 <p>See also other <a href="#others">other add-ons</a>.</p>
-<h6>Blocks of text</h6>
+<h6 id="h6-2">Blocks of text</h6>
 <p>Lists are ordered:</p>
 <ol>
   <li>First</li>
@@ -321,7 +336,7 @@ and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup>
   <figcaption>Simple Markdown editor &ldquo;Mark&nbsp;Editor&rdquo;</figcaption>
 </figure>
 <hr>
-<h6>Test Russian symbols</h6>
+<h6 id="h6-3">Test Russian symbols</h6>
 <p lang="ru">А этот текст на русском! Ещё текст&hellip;</p>
 <h6 id="others">Others</h6>
 <p><strong>Furigana</strong> (Japanese kanji spelling): <span lang="ja"> <ruby>私<rp>(</rp><rt>わたし</rt><rp>)</rp></ruby>は<ruby>日<rp>(</rp><rt>に</rt><rp>)</rp></ruby><ruby>本<rp>(</rp><rt>ほん</rt><rp>)</rp></ruby><ruby>人<rp>(</rp><rt>じん</rt><rp>)</rp></ruby>です。</span></p>
@@ -331,7 +346,7 @@ and date/time.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref">2</a></sup>
   <hr>
   <ol>
     <li id="fn:1">This is a footnote. <a href="#fnref:1" class="footnote-backref">&uarr;</a></li>
-    <li id="fn:2">2026-09-09 12:00 <a href="#fnref:2" class="footnote-backref">&uarr;</a></li>
+    <li id="fn:2">2026-09-17 12:00 <a href="#fnref:2" class="footnote-backref">&uarr;</a></li>
   </ol>
 </div>
   </body>
