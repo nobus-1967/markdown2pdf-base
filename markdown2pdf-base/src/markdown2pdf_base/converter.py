@@ -1304,6 +1304,31 @@ def _write_lua_filter(
         )
 
 
+def _strip_benign_warnings(stderr: str) -> str:
+    """Drop harmless ``hyperref`` warnings about undefined TOC link targets.
+
+    ``markdown2html5-base`` emits heading IDs only for explicit ``{#id}``
+    markers (``## … {#toc}``). Links to headings without such a marker have no
+    matching target in the HTML either, and pandoc surfaces one warning per
+    dead TOC entry. The PDF output is unaffected (the link text still
+    renders), so these warnings are filtered out.
+    """
+    lines = stderr.splitlines()
+    skipped = (
+        r".*LaTeX Warning: Hyper reference.*",
+        r".*undefined on input.*",
+        r".*There were undefined references.*",
+        # wrapped continuation lines of a suppressed "Hyper reference" warning
+        r"^\s+on input line \d+\.$",
+        r"^\s+line \d+\.$",
+    )
+    return "\n".join(
+        line
+        for line in lines
+        if not any(re.match(pattern, line) for pattern in skipped)
+    )
+
+
 def _pandoc_html_to_pdf(
     html_path: str,
     pdf_path: str,
@@ -1357,7 +1382,7 @@ def _pandoc_html_to_pdf(
                 f"pandoc failed: {result.stderr.strip() or result.stdout.strip() or 'code ' + str(result.returncode)}"
             )
         if result.stderr:
-            print(result.stderr, file=sys.stderr)
+            print(_strip_benign_warnings(result.stderr), file=sys.stderr)
     finally:
         if os.path.exists(header_path):
             os.unlink(header_path)

@@ -13,7 +13,7 @@ All markdown2html5-base features are supported:
 - Inline code and fenced code blocks
 - Links and images (relative paths resolved automatically)
 - Horizontal rules
-- Unordered, ordered, and task lists (checkboxes)
+- Unordered, ordered, nested, and task lists (checkboxes)
 - Blockquotes
 - Tables with alignment and footer (thead/tbody/tfoot)
 - Definition lists (dl/dt/dd)
@@ -37,7 +37,7 @@ You can also evaluate the results using CLI: `markdown2pdf-base input.md -o outp
 
 ## Requirements
 
-- `markdown2html5-base` >= 0.5.3;
+- `markdown2html5-base` >= 0.6.0;
 - `pandoc` with Lua filter support;
 - `xelatex` (TeX Live);
 - `Noto` and `Symbola` fonts (see [README](./markdown2pdf-base/README.md) for details).

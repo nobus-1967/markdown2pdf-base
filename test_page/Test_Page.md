@@ -4,10 +4,10 @@ title: Test Page
 author: nobus-1967
 description: Test Page for markdown2html5-base converter.
 keywords: markdown, html5
-published: 2026-09-17
+published: 2026-09-18
 ---
 
-[Test Page, created for markdown2html5-base converter (ver. 0.5.3).]: #
+[Test Page, created for markdown2html5-base converter (ver. 0.6.0).]: #
 
 # Heading 1
 
@@ -32,7 +32,7 @@ This is a test page.
 
 ### Heading 3 {#h3-1}
 
-This page was created for `markdown2html5-base` converter (ver. 0.5.3).
+This page was created for `markdown2html5-base` converter (ver. 0.6.0).
 
 ###### Heading 6: Formatting the text {#h6-1}
 
@@ -58,7 +58,7 @@ Lists are ordered:
 or unordered:
 
 - Bird
-- Chat
+- {:fr}Chat{:}
 - Dog
 
 To-Do lists are ordered:
@@ -70,6 +70,12 @@ or unordered:
 
 - [ ] Not complete yet...
 - [x] Complete!
+
+and also nested:
+
+- Parent
+  - Child
+    1. Grandchild
 
 Definition list:
 
@@ -116,4 +122,4 @@ This \*not italic\* is escaped by \\.
 
 [^1]: This is a footnote.
 
-[^2]: 2026-09-17 12:00
+[^2]: 2026-09-18 12:00

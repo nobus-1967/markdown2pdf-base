@@ -1,14 +1,16 @@
 # markdown2pdf-base
 
-Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex). Version 0.5.3 — feature-aligned with `markdown2html5-base` 0.5.3.
+Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex). Version 0.6.0 — feature-aligned with `markdown2html5-base` 0.6.0.
 
-From 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
+Since 0.3.2: inline code renders in plain black mono; long runs break across lines via `\allowbreak`; heading code uses plain `\texttt` (macros/breaks are unsafe in moving arguments); per-language CJK fonts (`--cjk-{ja,cn,tw,hk,kr}-font`) can be used simultaneously; ruby annotations keep the doc-language CJK font.
 
 Since 0.5.3: Images are rendered as in-flow figures scaled to the line width with an italic, left-aligned `figcaption` below (no float, no auto-numbering); untitled images get no caption or "Figure N:" label. Also image file paths containing spaces (URL-encoded as `%20`) are decoded before embedding so `\includegraphics` never sees a literal `%`; tables with wrapping cells use X-type columns for every column so `xltabular` cannot overflow TeX main memory; table headers with `\endhead` repeat across page breaks and are never orphaned alone at the bottom of a page; highlighted text (`<mark>`/`==…==`) is serialized without break penalties so `soul`'s `\hl` renders it reliably even around punctuation; vertical space before and after lists, blockquotes, code blocks and definition lists equals the paragraph spacing, and around images and tables it is equal to or at most twice the paragraph spacing; any `## … {#toc}` heading (in any language) is rendered italic, matching the `h2#toc` CSS rule of `markdown2html5-base` 0.5.3.
 
+Since 0.6.0: nested lists are supported — sublists that `markdown2html5-base` 0.6.0 nests inside their parent `<li>` keep their level, and bullet/number markers follow the nesting depth. This is a feature-alignment release; the PDF pipeline emits each nesting level as a proper nested `itemize`/`enumerate`, matching the HTML structure of `markdown2html5-base` 0.6.0. Benign `xelatex` warnings about undefined TOC link targets (links to headings without an explicit `{#id}` marker — dead links in the HTML too) are omitted from pandoc's stderr.
+
 ## Requirements
 
-- `markdown2html5-base >= 0.5.3` (Python package)
+- `markdown2html5-base >= 0.6.0` (Python package)
 - `pandoc` with Lua filter support
 - `xelatex` (TeX Live) with `fontspec`, `xeCJK`, `ruby`, `fvextra`, `framed`, `titlesec`, `mdframed`, `longtable`, `colortbl`
 - Fonts (see [Fonts](#fonts)): `Noto Fonts` (`Noto Sans`, `Noto Serif`, `Noto Sans Mono`, `Noto Serif CJK JP/SC/TC/HK/KR`) and `Symbola`; run `fc-list`/`fc-match` from `fontconfig` to verify availability
@@ -71,14 +73,14 @@ data = convert(
 
 ## Features
 
-All `markdown2html5-base` 0.5.3 operations are supported:
+All `markdown2html5-base` 0.6.0 operations are supported:
 
 - Headings (H1–H6) with custom IDs, including TOC (H6 rendered as a sans-serif bold-italic paragraph for PDF typography, with the `id` preserved as an anchor so internal links resolve)
 - Bold, italic, strikethrough, highlight, subscript, superscript, underline (`<u>` tag)
 - Inline code and fenced code blocks
 - Links and images (relative paths resolved automatically; image titles such as `![alt](img.png "Title")` become figure captions — images wrapped in `<figure>` render in-flow scaled to the line width, with an italic, left-aligned `figcaption` below and no auto-numbering; untitled images render without a caption or "Figure N:" label)
 - Horizontal rules
-- Unordered, ordered, and task lists (checkboxes)
+- Unordered, ordered, nested, and task lists (checkboxes)
 - Blockquotes
 - Tables with alignment and footer (thead/tbody/tfoot)
 - Definition lists (dl/dt/dd)

@@ -217,6 +217,57 @@ def test_convert_table_long_cells_no_memory_overflow(tmp_path: Path) -> None:
 
 
 @needs_pandoc
+def test_convert_nested_lists(tmp_path: Path) -> None:
+    """Nested lists (markdown2html5-base >= 0.6.0) keep their nesting in the PDF."""
+    md = (
+        "- Item 1\n"
+        "- Item 2\n"
+        "  - Subitem 1\n"
+        "  - Subitem 2\n"
+        "- Item 3\n"
+        "\n"
+        "- Item 4\n"
+        "- Item 5\n"
+        "  1. Subone\n"
+        "     - Subsubitem\n"
+        "  2. Subtwo\n"
+    )
+    data = convert(md, None)
+    assert data is not None
+    pdf_path = tmp_path / "nested.pdf"
+    pdf_path.write_bytes(data)
+
+    text = _extract_text(pdf_path)
+    # Ordering proves the sublists stayed inside their parent item:
+    # Item 2 before Subitem 1/2 before Item 3; Item 5 before Subone before Subtwo.
+    pos = {
+        key: text.index(key)
+        for key in (
+            "Item 2",
+            "Subitem 1",
+            "Item 3",
+            "Item 5",
+            "Subone",
+            "Subsubitem",
+            "Subtwo",
+        )
+    }
+    assert pos["Item 2"] < pos["Subitem 1"] < pos["Item 3"]
+    assert pos["Item 5"] < pos["Subone"] < pos["Subsubitem"] < pos["Subtwo"]
+    assert "Item 1" in text
+
+    layout = subprocess.run(
+        ["pdftotext", "-layout", str(pdf_path), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.splitlines()
+    parent = next(ln for ln in layout if "Item 2" in ln)
+    child = next(ln for ln in layout if "Subitem 1" in ln)
+    assert len(child) - len(child.lstrip()) > len(parent) - len(parent.lstrip())
+
+
+@needs_pandoc
 def test_convert_task_list_checkboxes(tmp_path: Path) -> None:
     """Task-list checkboxes render via the symbol font (☑ checked, ☐ unchecked)."""
     if shutil.which("pdffonts") is None:
