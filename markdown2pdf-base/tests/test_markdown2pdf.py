@@ -1,4 +1,8 @@
-"""End-to-end Markdown-to-PDF conversion tests (require pandoc + xelatex)."""
+"""End-to-end Markdown-to-PDF conversion tests (require pandoc + xelatex).
+
+The PDF geometry helpers rely on ``pdftotext`` from poppler-utils; tests that
+need the bounding boxes are skipped when it is unavailable.
+"""
 
 import base64
 import re
@@ -8,10 +12,24 @@ from pathlib import Path
 
 import pytest
 
-from markdown2pdf_base.converter import convert, convert_file
+from markdown2html5_base import MarkdownToHTML
+from markdown2pdf_base.converter import (
+    CJK_DEFAULT_FONTS,
+    FontConfig,
+    _make_latex_header,
+    _process_html,
+    _write_lua_filter,
+    convert,
+    convert_file,
+)
 
 needs_pandoc = pytest.mark.skipif(
     shutil.which("pandoc") is None, reason="pandoc binary environment is not available"
+)
+
+needs_pdftotext = pytest.mark.skipif(
+    shutil.which("pdftotext") is None,
+    reason="pdftotext binary (poppler-utils) is not available",
 )
 
 
@@ -23,6 +41,22 @@ def _extract_text(pdf: Path) -> str:
         text=True,
         check=False,
     ).stdout
+
+
+def _text_right_edge(pdf: Path) -> float:
+    """Return the x coordinate of the right text margin of ``pdf``, in points.
+
+    The preamble sets 25.4 mm (72 pt) margins on every side, so the right text
+    edge sits one margin width left of the page edge.
+    """
+    boxes = subprocess.run(
+        ["pdftotext", "-bbox-layout", str(pdf), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    page_width = float(re.search(r'<page width="([\d.]+)"', boxes).group(1))
+    return page_width - 72.0
 
 
 @needs_pandoc
@@ -115,8 +149,33 @@ def test_convert_inline_code_special_chars(tmp_path: Path) -> None:
 
 
 @needs_pandoc
+def test_convert_escapes_latex_special_chars(tmp_path: Path) -> None:
+    """Plain text keeps LaTeX special characters in filter-serialized contexts.
+
+    Table cells, headings and link text are serialized by the Lua filter, not by
+    pandoc's own LaTeX writer, so they depend on the filter's escaping: ``$``,
+    ``%``, ``_``, ``&``, ``#``, ``{`` and ``}`` must all survive verbatim.
+    """
+    md = (
+        "# Heading_with $dollar & amp # hash {brace} 50% off\n\n"
+        "| Item | Price |\n| :--- | ---: |\n"
+        "| a_b & c | $3.00 |\n\n"
+        "A [a_b link](http://example.com) and 50% off.\n"
+    )
+
+    pdf_path = tmp_path / "escapes.pdf"
+    pdf_path.write_bytes(convert(md, None) or b"")
+
+    # Headings may wrap, so compare against whitespace-free text.
+    text = "".join(_extract_text(pdf_path).split())
+    assert "Heading_with$dollar&amp#hash{brace}50%off" in text
+    assert "a_b&c$3.00" in text
+    assert "a_blinkand50%off." in text
+
+
+@needs_pandoc
 def test_convert_inline_code_in_heading(tmp_path: Path) -> None:
-    """Inline code nested inside headings skips breakable_code rewrites."""
+    """Inline code nested inside headings gets the same breakable rewrites as body text."""
     md = (
         "# Title `<code>markdown2html5-base</code>`\n\n"
         "Body with `x^y` and long "
@@ -131,10 +190,123 @@ def test_convert_inline_code_in_heading(tmp_path: Path) -> None:
     pdf_path.write_bytes(data)
 
     text = _extract_text(pdf_path)
-    assert "Title <code>markdown2html5-base</code>" in text
     assert "x^y" in text
     compacted = re.sub(r"\s+", "", text)
+    assert "Title<code>markdown2html5-base</code>" in compacted
     assert "foo_bar" in compacted
+
+
+@needs_pandoc
+@needs_pdftotext
+@pytest.mark.parametrize(
+    "heading",
+    [
+        pytest.param(
+            "Полное руководство по библиотекам романизации Хангыля в `Python`: "
+            "`korean-romanizer` и `koroman`",
+            id="ru",
+        ),
+        pytest.param(
+            "A Comprehensive Guide to Hangul Romanization Libraries in Python: "
+            "`korean-romanizer` and `koroman`",
+            id="en",
+        ),
+    ],
+)
+def test_convert_long_heading_stays_inside_margins(
+    tmp_path: Path, heading: str
+) -> None:
+    """A heading wider than the text block wraps instead of overrunning the right margin.
+
+    Headings H1-H5 are set at 15-24 pt, so a single line holds far fewer words
+    than body text; they must break exactly like the paragraphs around them.
+    """
+    md = "\n\n".join(
+        f"{'#' * level} {heading}\n\n{heading} written as a paragraph."
+        for level in range(1, 6)
+    )
+
+    pdf_path = tmp_path / "headings.pdf"
+    pdf_path.write_bytes(convert(md, None) or b"")
+
+    right_margin = _text_right_edge(pdf_path)
+    boxes = subprocess.run(
+        ["pdftotext", "-bbox-layout", str(pdf_path), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    x_max = [float(value) for value in re.findall(r'xMax="([\d.]+)"', boxes)]
+    assert x_max, "no text boxes were extracted from the PDF"
+    assert max(x_max) <= right_margin + 0.5
+
+
+@needs_pandoc
+@needs_pdftotext
+def test_convert_long_heading_survives_toc(tmp_path: Path) -> None:
+    """Heading break penalties stay valid when LaTeX writes them to a ``.toc`` file.
+
+    Section titles are moving arguments: the ``\\penalty``/``\\allowbreak`` tokens
+    the filter inserts must be written to the table of contents and read back
+    without errors on the following runs.
+    """
+    heading = (
+        "A Comprehensive Guide to Hangul Romanization Libraries in Python: "
+        "`korean-romanizer` and `koroman`"
+    )
+    md = "\n\n".join(f"{'#' * level} {heading}" for level in range(1, 4))
+
+    html_path = tmp_path / "doc.html"
+    header_path = tmp_path / "header.tex"
+    lua_path = tmp_path / "filter.lua"
+    tex_path = tmp_path / "doc.tex"
+
+    font_config = FontConfig()
+    html, _ = _process_html(MarkdownToHTML().convert(md), None, "en", font_config)
+    html_path.write_text(html, encoding="utf-8")
+    header_path.write_text(
+        _make_latex_header(font_config, dict(CJK_DEFAULT_FONTS), "ja"),
+        encoding="utf-8",
+    )
+    _write_lua_filter(str(lua_path), dict(CJK_DEFAULT_FONTS), "ja")
+
+    subprocess.run(
+        [
+            "pandoc",
+            str(html_path),
+            "-o",
+            str(tex_path),
+            "--pdf-engine=xelatex",
+            "--variable=fontsize:12pt",
+            "-H",
+            str(header_path),
+            "--lua-filter",
+            str(lua_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    # Force a real table of contents so the section titles are written to a
+    # .toc file and read back, the way a multi-run build would.
+    tex_path.write_text(
+        tex_path.read_text(encoding="utf-8").replace(
+            "\\begin{document}", "\\begin{document}\n\\tableofcontents", 1
+        ),
+        encoding="utf-8",
+    )
+
+    for _ in range(2):
+        result = subprocess.run(
+            ["xelatex", "-interaction=nonstopmode", str(tex_path)],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    log = (tmp_path / "doc.log").read_text(encoding="utf-8", errors="replace")
+    assert result.returncode == 0, log
+    assert not re.search(r"^! ", log, re.MULTILINE), log
 
 
 @needs_pandoc

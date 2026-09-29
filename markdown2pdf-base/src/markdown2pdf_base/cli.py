@@ -1,3 +1,5 @@
+"""Command-line interface for ``markdown2pdf-base``."""
+
 import argparse
 import sys
 

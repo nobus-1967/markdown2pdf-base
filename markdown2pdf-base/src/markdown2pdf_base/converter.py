@@ -264,11 +264,19 @@ $font_settings
 $cjk_font_settings
 
 \newfontfamily{\headfont}{$head_font}
-\titleformat{\section}{\fontsize{24}{29}\selectfont\bfseries\headfont}{\thesection}{1em}{}
-\titleformat{\subsection}{\fontsize{21}{26}\selectfont\bfseries\headfont}{\thesubsection}{1em}{}
-\titleformat{\subsubsection}{\fontsize{18}{22}\selectfont\bfseries\headfont}{\thesubsubsection}{1em}{}
-\titleformat{\paragraph}{\fontsize{15}{19}\selectfont\bfseries\headfont}{\theparagraph}{1em}{}
-\titleformat{\subparagraph}{\fontsize{13.5}{17}\selectfont\bfseries\headfont}{\thesubparagraph}{1em}{}
+% A heading is typeset at 15-24pt, so one line holds far fewer words than the
+% body text and a wide heading is the first thing to run past the right margin.
+% \RaggedRight is re-issued inside the heading so that its 2em of \rightskip
+% stretch is measured in the *heading's* font size (in the preamble it is
+% measured in the body size), which gives the line breaker room to move the
+% last word down. Hyphenation stays off, as in the body text, so the heading
+% wraps exactly like the paragraph under it and gains no hyphens the HTML5
+% document does not have.
+\titleformat{\section}{\fontsize{24}{29}\selectfont\RaggedRight\bfseries\headfont}{\thesection}{1em}{}
+\titleformat{\subsection}{\fontsize{21}{26}\selectfont\RaggedRight\bfseries\headfont}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\fontsize{18}{22}\selectfont\RaggedRight\bfseries\headfont}{\thesubsubsection}{1em}{}
+\titleformat{\paragraph}{\fontsize{15}{19}\selectfont\RaggedRight\bfseries\headfont}{\theparagraph}{1em}{}
+\titleformat{\subparagraph}{\fontsize{13.5}{17}\selectfont\RaggedRight\bfseries\headfont}{\thesubparagraph}{1em}{}
 \titlespacing*{\section}{0pt}{1.2em}{0.6em}
 \titlespacing*{\subsection}{0pt}{1.2em}{0.6em}
 \titlespacing*{\subsubsection}{0pt}{1.2em}{0.6em}
@@ -455,11 +463,8 @@ local function latex_escape_code(text)
   return (text:gsub(utf8.charpattern, function(ch) return code_escapes[ch] or ch end))
 end
 
-local hdr_walker = {
-  Code = function(el)
-    return pandoc.RawInline('latex', '\\\\texttt{' .. latex_escape_code(el.text) .. '}')
-  end,
-}
+-- Filled in below, once the text serializers it depends on are defined.
+local hdr_walker
 
 local SE_ANY = '\\\\penalty1000{}'
 local SE_PUNCT = '\\\\penalty500{}'
@@ -567,7 +572,10 @@ local serialize_nobreak
 
 local function latex_escape_chars(s)
   s = s:gsub('\\\\', '\\\\textbackslash{}')
-  s = s:gsub('([{}$$&#_%%%%])', '\\\\%%1')
+  -- The replacement must be a backslash followed by the capture (`\\%1`); a
+  -- `%` there would be read as the capture marker and the matched character
+  -- would be dropped from the output.
+  s = s:gsub('([{}$$&#_%%%%])', '\\\\%1')
   s = s:gsub('~', '\\\\textasciitilde{}')
   s = s:gsub('%%^', '\\\\textasciicircum{}')
   return s
@@ -613,6 +621,18 @@ end
 local function latex_escape_text(s)
   return breakable_text(latex_escape_chars(s))
 end
+
+-- Headings use the same breakable serialisation as body text, so a long
+-- heading wraps like the paragraphs around it instead of running past the
+-- right margin.
+hdr_walker = {
+  Str = function(inl)
+    return pandoc.List{pandoc.RawInline('latex', latex_escape_text(inl.text))}
+  end,
+  Code = function(el)
+    return pandoc.RawInline('latex', code_latex(el))
+  end,
+}
 
 escape_nobreak = function(s)
   return latex_escape_chars(s)
@@ -863,6 +883,29 @@ local function figure_latex(fig)
   return after_spacing(table.concat(out))
 end
 
+-- `pandoc.walk_inline` applies only the *global* filters to the element handed
+-- to it; a filter table is only consulted while descending into children. Run
+-- the global filters and then the walker handlers ourselves so that
+-- `hdr_walker` actually applies to the heading's own inlines.
+local function walk_header_inlines(inlines, walker)
+  local cc = pandoc.List()
+  for i = 1, #inlines do
+    local res = pandoc.walk_inline(inlines[i], walker)
+    if res.tag then res = { res } end
+    for k = 1, #res do
+      local inl = res[k]
+      local handler = walker[inl.t]
+      if handler then
+        local out = handler(inl)
+        if out.tag then cc:insert(out) else for m = 1, #out do cc:insert(out[m]) end end
+      else
+        cc:insert(inl)
+      end
+    end
+  end
+  return cc
+end
+
 function Pandoc(doc)
   local out = pandoc.List()
   local i = 1
@@ -870,11 +913,7 @@ function Pandoc(doc)
   while i <= blocks_len do
     local b = doc.blocks[i]
     if b.t == 'Header' then
-      local cc = pandoc.List()
-      for j = 1, #b.content do
-        local res = pandoc.walk_inline(b.content[j], hdr_walker)
-        if res.tag then cc:insert(res) else for k = 1, #res do cc:insert(res[k]) end end
-      end
+      local cc = walk_header_inlines(b.content, hdr_walker)
       if b.level == 2 and b.identifier == 'toc' then
         b.content = pandoc.List{pandoc.RawInline('latex', '\\\\textit{' .. serialize_inlines(cc) .. '}')}
       else
@@ -1190,6 +1229,7 @@ def _h6_to_bold_italic_para(html: str) -> str:
     id_pattern = re.compile(r'\bid="([^"]*)"')
 
     def _convert(m: re.Match[str]) -> str:
+        """Emit one ``h6`` paragraph, keeping any heading ID as an anchor target."""
         idm = id_pattern.search(m.group(1))
         anchor = f'<a id="{idm.group(1)}"></a>' if idm else ""
         return f'{anchor}<p><span class="h6">{m.group(2)}</span></p>'
@@ -1427,6 +1467,7 @@ def _wrap_block_lang(html: str) -> str:
         """Re-emit HTML verbatim, wrapping CJK block content in ``<span lang>`` tags."""
 
         def __init__(self) -> None:
+            """Start an empty rewrite buffer with entity conversion left to us."""
             super().__init__(convert_charrefs=False)
             self.out: list[str] = []
             self._stack: list[tuple[str, str | None]] = []
@@ -1435,6 +1476,7 @@ def _wrap_block_lang(html: str) -> str:
         def handle_starttag(
             self, tag: str, attrs: list[tuple[str, str | None]]
         ) -> None:
+            """Re-emit an opening tag, opening a ``<span lang>`` for CJK blocks."""
             self._emit_raw("<", tag, self._attrs_string(attrs), ">")
             if not self._is_void(tag):
                 lang = self._attr(attrs)
@@ -1448,9 +1490,11 @@ def _wrap_block_lang(html: str) -> str:
         def handle_startendtag(
             self, tag: str, attrs: list[tuple[str, str | None]]
         ) -> None:
+            """Re-emit a self-closing tag unchanged."""
             self._emit_raw("<", tag, self._attrs_string(attrs), "/>")
 
         def handle_endtag(self, tag: str) -> None:
+            """Re-emit a closing tag, closing any ``<span lang>`` opened for it."""
             if self._stack:
                 pop_tag, _ = self._stack.pop()
                 wrapped = self._wraps.pop() if self._wraps else False
@@ -1467,16 +1511,20 @@ def _wrap_block_lang(html: str) -> str:
             self.out.append(f"</{tag}>")
 
         def handle_data(self, data: str) -> None:
+            """Copy text content through verbatim."""
             self.out.append(data)
 
         def handle_entityref(self, name: str) -> None:
+            """Re-emit a named character reference in its original form."""
             self.out.append(f"&{name};")
 
         def handle_charref(self, name: str) -> None:
+            """Re-emit a numeric character reference in its original form."""
             self.out.append(f"&#{name};")
 
         @staticmethod
         def _attr(attrs: list[tuple[str, str | None]]) -> str | None:
+            """Return the ``lang`` attribute value, or ``None`` when it is absent."""
             for k, v in attrs:
                 if k == "lang":
                     return v
@@ -1484,6 +1532,7 @@ def _wrap_block_lang(html: str) -> str:
 
         @staticmethod
         def _is_void(tag: str) -> bool:
+            """Return ``True`` for HTML void elements, which never open a span."""
             return tag in {
                 "area",
                 "base",
@@ -1503,6 +1552,7 @@ def _wrap_block_lang(html: str) -> str:
 
         @staticmethod
         def _attrs_string(attrs: list[tuple[str, str | None]]) -> str:
+            """Render an attribute list back to source form, preserving bare names."""
             parts = []
             for k, v in attrs:
                 if v is None:
@@ -1512,6 +1562,7 @@ def _wrap_block_lang(html: str) -> str:
             return (" " + " ".join(parts)) if parts else ""
 
         def _emit_raw(self, *parts: str) -> None:
+            """Append one raw fragment built by joining ``parts``."""
             self.out.append("".join(parts))
 
     rewriter = _LangRewriter()
