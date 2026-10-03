@@ -16,7 +16,11 @@ import pytest
 from markdown2html5_base import MarkdownToHTML
 from markdown2pdf_base.converter import (
     CJK_DEFAULT_FONTS,
+    DEFAULT_PAGE_LAYOUT,
+    PAGE_LAYOUTS,
+    PAGE_MARGIN_MM,
     FontConfig,
+    _geometry_options,
     _make_latex_header,
     _process_html,
     _write_lua_filter,
@@ -58,6 +62,24 @@ def _text_right_edge(pdf: Path) -> float:
     ).stdout
     page_width = float(re.search(r'<page width="([\d.]+)"', boxes).group(1))
     return page_width - 72.0
+
+
+def _page_size(pdf: Path) -> tuple[float, float]:
+    """Return the ``(width, height)`` of ``pdf``'s first page, in points.
+
+    Read back from the compiled PDF rather than from the LaTeX source, so the
+    orientation is verified as XeLaTeX actually laid the page out.  Letter paper
+    is 612 x 792 pt, so landscape means the width exceeds the height.
+    """
+    boxes = subprocess.run(
+        ["pdftotext", "-bbox-layout", str(pdf), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    page = re.search(r'<page width="([\d.]+)" height="([\d.]+)"', boxes)
+    assert page is not None, f"no page box found in {pdf}"
+    return float(page.group(1)), float(page.group(2))
 
 
 @needs_pandoc
@@ -809,3 +831,117 @@ def test_table_header_repeat_no_orphan(tmp_path: Path) -> None:
     pdf_path.write_bytes(data)
     # Valid PDF produced (was: \endhead caused header duplication across pages)
     assert pdf_path.stat().st_size > 100
+
+
+def test_geometry_options_cover_both_orientations() -> None:
+    """``_geometry_options`` emits the margin alone for portrait, plus a key for landscape."""
+    assert PAGE_LAYOUTS == ("portrait", "landscape")
+    assert DEFAULT_PAGE_LAYOUT == "portrait"
+    assert _geometry_options(None) == f"margin={PAGE_MARGIN_MM}"
+    assert _geometry_options("portrait") == f"margin={PAGE_MARGIN_MM}"
+    assert _geometry_options("landscape") == f"margin={PAGE_MARGIN_MM},landscape"
+
+
+def test_geometry_options_ignore_case_and_padding() -> None:
+    """The orientation name is normalised, so ``Landscape`` and `` landscape `` both work."""
+    for spelling in ("Landscape", "LANDSCAPE", " landscape ", "\tlandscape\n"):
+        assert _geometry_options(spelling) == f"margin={PAGE_MARGIN_MM},landscape"
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "sideways", "a4", "port", "land scape"])
+def test_geometry_options_reject_unknown_layouts(bad: str) -> None:
+    """An unrecognised orientation is refused with a message naming the valid ones."""
+    with pytest.raises(ValueError) as excinfo:
+        _geometry_options(bad)
+    message = str(excinfo.value)
+    assert "unknown page layout" in message
+    for name in PAGE_LAYOUTS:
+        assert repr(name) in message
+
+
+def test_portrait_preamble_carries_no_landscape_key() -> None:
+    """Portrait stays the implicit default: the header equals the no-argument one."""
+    config = FontConfig(
+        main="Main",
+        head="Head",
+        mono="Mono",
+        symbol="Symbol",
+        cjk=dict(CJK_DEFAULT_FONTS),
+    )
+    implicit = _make_latex_header(config, dict(CJK_DEFAULT_FONTS), "ja")
+    explicit = _make_latex_header(
+        config, dict(CJK_DEFAULT_FONTS), "ja", None, DEFAULT_PAGE_LAYOUT
+    )
+    landscape = _make_latex_header(
+        config, dict(CJK_DEFAULT_FONTS), "ja", None, "landscape"
+    )
+
+    assert implicit == explicit
+    assert f"\\usepackage[margin={PAGE_MARGIN_MM}]{{geometry}}" in implicit
+    assert "landscape" not in implicit
+    # Only the geometry line differs between the two orientations.
+    differing = [
+        (a, b) for a, b in zip(implicit.splitlines(), landscape.splitlines()) if a != b
+    ]
+    assert len(differing) == 1
+    assert differing[0][0] == f"\\usepackage[margin={PAGE_MARGIN_MM}]{{geometry}}"
+    assert (
+        differing[0][1]
+        == f"\\usepackage[margin={PAGE_MARGIN_MM},landscape]{{geometry}}"
+    )
+
+
+@needs_pandoc
+@needs_pdftotext
+def test_convert_landscape_swaps_the_page(tmp_path: Path) -> None:
+    """``page_layout="landscape"`` rotates the page; the default stays portrait."""
+    md = "# Heading\n\nBody text that wraps across a good part of the page.\n"
+
+    portrait = tmp_path / "portrait.pdf"
+    landscape = tmp_path / "landscape.pdf"
+    convert(md, str(portrait))
+    convert(md, str(landscape), page_layout="landscape")
+
+    portrait_size = _page_size(portrait)
+    landscape_size = _page_size(landscape)
+
+    # Letter paper: 612 x 792 pt, so landscape swaps the two.
+    assert portrait_size[0] < portrait_size[1]
+    assert landscape_size[0] > landscape_size[1]
+    assert round(landscape_size[0]) == round(portrait_size[1])
+    assert round(landscape_size[1]) == round(portrait_size[0])
+
+
+@needs_pandoc
+@needs_pdftotext
+def test_convert_file_forwards_page_layout(tmp_path: Path) -> None:
+    """``convert_file`` passes the orientation through to the compiled page."""
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Heading\n\nBody text.\n", encoding="utf-8")
+
+    portrait = tmp_path / "portrait.pdf"
+    landscape = tmp_path / "landscape.pdf"
+    convert_file(str(md_path), str(portrait))
+    convert_file(str(md_path), str(landscape), page_layout="landscape")
+
+    assert _page_size(portrait)[0] < _page_size(portrait)[1]
+    assert _page_size(landscape)[0] > _page_size(landscape)[1]
+
+
+@needs_pandoc
+def test_convert_rejects_unknown_page_layout() -> None:
+    """An unknown orientation fails before pandoc is invoked."""
+    with pytest.raises(ValueError, match="unknown page layout"):
+        convert("# Heading\n\nBody.\n", None, page_layout="sideways")
+
+
+@needs_pandoc
+def test_convert_file_rejects_unknown_page_layout(tmp_path: Path) -> None:
+    """``convert_file`` validates the orientation too, and not by running LaTeX."""
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Heading\n\nBody.\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown page layout"):
+        convert_file(str(md_path), str(tmp_path / "out.pdf"), page_layout="a4")
+
+    assert not (tmp_path / "out.pdf").exists()

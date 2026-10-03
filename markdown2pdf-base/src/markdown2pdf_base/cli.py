@@ -11,16 +11,18 @@ from markdown2pdf_base.converter import (
     DEFAULT_HEAD_FONT,
     DEFAULT_MAIN_FONT,
     DEFAULT_MONO_FONT,
+    DEFAULT_PAGE_LAYOUT,
     DEFAULT_SYMBOL_FONT,
+    PAGE_LAYOUTS,
 )
 
 
 def main() -> None:
     """Entry point for the ``markdown2pdf-base`` command-line interface.
 
-    Parses command-line arguments (input file, output path, language and font
-    overrides), then converts Markdown to PDF. Reads from stdin when no input
-    file is given and stdout is not a TTY.
+    Parses command-line arguments (input file, output path, language, page
+    orientation and font overrides), then converts Markdown to PDF. Reads from
+    stdin when no input file is given and stdout is not a TTY.
     """
     parser = argparse.ArgumentParser(
         description="Convert Markdown to PDF using markdown2html5-base + pandoc"
@@ -37,6 +39,13 @@ def main() -> None:
     )
     parser.add_argument("-o", "--output", type=str, help="Output PDF file")
     parser.add_argument("--lang", default=None, help="Document language (BCP 47)")
+    parser.add_argument(
+        "--page",
+        default=None,
+        metavar="LAYOUT",
+        choices=PAGE_LAYOUTS,
+        help=f"Page orientation portrait or landscape (default: {DEFAULT_PAGE_LAYOUT})",
+    )
     parser.add_argument(
         "--main-font",
         default=None,
@@ -78,6 +87,8 @@ def main() -> None:
     kwargs = {}
     if args.lang:
         kwargs["lang"] = args.lang
+    if args.page:
+        kwargs["page_layout"] = args.page
     if args.main_font:
         kwargs["main_font"] = args.main_font
     if args.head_font:

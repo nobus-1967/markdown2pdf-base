@@ -1,6 +1,8 @@
 # markdown2pdf-base
 
-Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex). Version 0.6.2 — requires `markdown2html5-base` 0.6.1, so identifiers and link targets are rendered correctly.
+Convert Markdown to PDF using [markdown2html5-base](https://github.com/nobus-1967/markdown2html5-base) and pandoc (xelatex). Version 0.6.3 — requires `markdown2html5-base` 0.6.1, so identifiers and link targets are rendered correctly.
+
+Since 0.6.3: the page can be turned to landscape with `--page landscape` (or `page_layout="landscape"` in Python), which makes `geometry` swap paper width and height while the 25.4 mm margins stay put — so landscape is a wider and shorter text block, and portrait remains the default, leaving every document that does not ask for landscape laid out exactly as before.
 
 Since 0.6.2: headings wrap only at spaces — `\RaggedRight` is re-issued inside `\titleformat` so the stretch is measured in the heading's own font size and a title never crosses the right margin. A code span in a title breaks at a space or after one of the word-joining characters `- _ / = \` and never inside a word, and H6 — a paragraph rather than a `\titleformat` heading — has the paragraph break tokens taken back out of it so it breaks only at its spaces too, which leaves a code span in an H6 with fewer opportunities than in H1–H5.
 
@@ -36,6 +38,9 @@ markdown2pdf-base input.md -o output.pdf \
   --lang ja --main-font "Noto Serif" --head-font "Noto Sans" \
   --cjk-ja-font "Noto Serif CJK JP" --mono-font "Noto Sans Mono" \
   --symbol-font "Symbola"
+
+# Landscape page instead of portrait
+markdown2pdf-base input.md -o output.pdf --page landscape
 ```
 
 ### Options
@@ -43,6 +48,7 @@ markdown2pdf-base input.md -o output.pdf \
 | Option            | Description                                          | Default             |
 | ----------------- | ---------------------------------------------------- | ------------------- |
 | `--lang`          | Document language (BCP 47, e.g. `ja`, `zh-CN`)       | from front matter   |
+| `--page`          | Page orientation: `portrait` or `landscape`          | `portrait`          |
 | `--main-font`     | Main text font                                       | `Noto Serif`        |
 | `--head-font`     | Heading font                                         | `Noto Sans`         |
 | `--cjk-font`      | CJK font override for the document language          | by language         |
@@ -65,6 +71,8 @@ convert_file("input.md", "output.pdf")  # write to file
 data = convert("# Hello", None)  # returns PDF bytes
 data = convert("# こんにちは", None, lang="ja")  # language-driven CJK font
 data = convert("# Hi", None, main_font="Noto Serif", head_font="Noto Sans")
+# Landscape page instead of the default portrait
+data = convert("# Hello", None, page_layout="landscape")
 # Per-language CJK fonts, usable simultaneously
 data = convert(
     "# 混合",
@@ -96,7 +104,7 @@ All `markdown2html5-base` 0.6.1 operations are supported:
 - HTML comments (`[comment]: #`)
 - Backslash escaping
 
-Page layout uses 25.4 mm (1 inch) margins on all sides (`geometry`), with page numbers in the bottom margin and a running header in the top one.
+Page layout uses 25.4 mm (1 inch) margins on all sides (`geometry`), with page numbers in the bottom margin and a running header in the top one. The paper itself is set by pandoc; `--page landscape` rotates it, which widens the text block and shortens the page.
 
 ### YAML front matter
 

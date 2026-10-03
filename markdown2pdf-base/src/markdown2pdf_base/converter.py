@@ -45,6 +45,20 @@ DEFAULT_CJK_MONO_KR_FONT: Final[str] = "Noto Sans Mono CJK KR"
 
 CJK_FONT_KEYS: Final[tuple[str, ...]] = ("ja", "cn", "tw", "hk", "kr")
 
+# ===========================================================================
+# Page Layout Constants
+# ===========================================================================
+
+# Accepted values of the `page_layout` argument, portrait first because it is the
+# default and therefore the one the argument-free code path uses.
+PAGE_LAYOUTS: Final[tuple[str, ...]] = ("portrait", "landscape")
+
+DEFAULT_PAGE_LAYOUT: Final[str] = "portrait"
+
+# The margin is set once for both orientations, so switching the orientation
+# changes nothing else about the text block but its width and height.
+PAGE_MARGIN_MM: Final[str] = "25.4mm"
+
 CJK_DEFAULT_FONTS: Final[Mapping[str, str]] = {
     "ja": DEFAULT_CJK_JP_FONT,
     "cn": DEFAULT_CJK_ZH_CN_FONT,
@@ -169,7 +183,7 @@ _CSS_TEMPLATE: Final[Template] = Template("""
     """)
 
 _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
-    r"""\usepackage[margin=25.4mm]{geometry}
+    r"""\usepackage[${geometry_options}]{geometry}
 \usepackage{graphicx}
 \usepackage{fancyhdr}
 \usepackage{fontspec}
@@ -321,14 +335,39 @@ def generate_css(config: FontConfig) -> str:
     )
 
 
+def _geometry_options(page_layout: str | None) -> str:
+    """Return the ``geometry`` package options for the requested orientation.
+
+    ``geometry``'s own ``landscape`` key swaps paper width and height, so the
+    same margins apply to both orientations and nothing else in the text block
+    changes.  Portrait needs no key at all, which keeps the emitted preamble
+    byte-identical to the releases that had no orientation switch.
+    """
+    layout = (
+        (DEFAULT_PAGE_LAYOUT if page_layout is None else page_layout).strip().lower()
+    )
+    if layout not in PAGE_LAYOUTS:
+        raise ValueError(
+            f"unknown page layout {page_layout!r}: expected one of "
+            + ", ".join(repr(name) for name in PAGE_LAYOUTS)
+        )
+    margin = f"margin={PAGE_MARGIN_MM}"
+    return margin if layout == DEFAULT_PAGE_LAYOUT else f"{margin},landscape"
+
+
 def generate_latex_preamble(
     config: FontConfig,
     header_title: str = "",
     font_settings: str = "",
     cjk_font_settings: str = "",
     document_hooks: str = "",
+    page_layout: str | None = DEFAULT_PAGE_LAYOUT,
 ) -> str:
-    """Substitute the configured fonts and document fragments into the LaTeX preamble."""
+    """Substitute the configured fonts, page layout and document fragments into the LaTeX preamble.
+
+    ``page_layout`` selects the page orientation; see :func:`_geometry_options`
+    for the accepted values and what each of them emits.
+    """
     return _LATEX_PREAMBLE_TEMPLATE.substitute(
         head_font=config.head,
         symbol_font=config.symbol,
@@ -336,6 +375,7 @@ def generate_latex_preamble(
         font_settings=font_settings,
         cjk_font_settings=cjk_font_settings,
         document_hooks=document_hooks,
+        geometry_options=_geometry_options(page_layout),
     )
 
 
@@ -1375,8 +1415,9 @@ def _make_latex_header(
     cjk_fonts: Mapping[str, str],
     main_cjk_key: str,
     pdf_metadata: DocumentMetadata | None = None,
+    page_layout: str | None = DEFAULT_PAGE_LAYOUT,
 ) -> str:
-    """Assemble the full LaTeX header (preamble, fonts and metadata) for XeLaTeX."""
+    """Assemble the full LaTeX header (preamble, fonts, page layout and metadata) for XeLaTeX."""
     metadata = pdf_metadata or DocumentMetadata()
     font_settings = f"{_guard_font_set('setmainfont', [config.main])}\n{_guard_font_set('setmonofont', [config.mono])}"
 
@@ -1404,6 +1445,7 @@ def _make_latex_header(
         font_settings=font_settings,
         cjk_font_settings=cjk_font_settings,
         document_hooks=_make_hypersetup(metadata),
+        page_layout=page_layout,
     )
 
 
@@ -1451,13 +1493,15 @@ def _pandoc_html_to_pdf(
     cjk_fonts: Mapping[str, str],
     main_cjk_key: str,
     cwd: str | None = None,
+    page_layout: str | None = DEFAULT_PAGE_LAYOUT,
 ) -> None:
     """Convert the given HTML file to a PDF by running pandoc with the XeLaTeX engine.
 
     ``cwd`` is the working directory for the pandoc/xelatex subprocess; set it to
     the document's source directory so relative image paths resolve correctly.
+    ``page_layout`` selects the page orientation; see :func:`_geometry_options`.
     """
-    header = _make_latex_header(config, cjk_fonts, main_cjk_key, metadata)
+    header = _make_latex_header(config, cjk_fonts, main_cjk_key, metadata, page_layout)
 
     # Write the header and Lua filter to temp files so pandoc can reference them
     with (
@@ -1698,11 +1742,15 @@ def convert(
     cjk_fonts: Mapping[str, str] | None = None,
     mono_font: str | None = None,
     symbol_font: str | None = None,
+    page_layout: str | None = DEFAULT_PAGE_LAYOUT,
 ) -> bytes | None:
     """Convert Markdown (or raw HTML) text into a compiled PDF.
 
     If ``output_path`` is given, the PDF is written there and ``None`` is
     returned; otherwise the PDF bytes are returned directly.
+
+    ``page_layout`` is ``"portrait"`` (the default) or ``"landscape"`` and
+    selects the page orientation; an unknown value raises :class:`ValueError`.
     """
     html_body = (
         markdown_text
@@ -1741,6 +1789,7 @@ def convert(
         "cjk_fonts": config.cjk,
         "main_cjk_key": main_cjk_key,
         "cwd": source_dir,
+        "page_layout": page_layout,
     }
     pdf_path: str | None = None
     try:
@@ -1772,10 +1821,12 @@ def convert_file(
     cjk_fonts: Mapping[str, str] | None = None,
     mono_font: str | None = None,
     symbol_font: str | None = None,
+    page_layout: str | None = DEFAULT_PAGE_LAYOUT,
 ) -> bytes | None:
     """Read the file at ``input_path`` and convert its contents to a PDF.
 
     Relative image paths are resolved against the input file's directory.
+    ``page_layout`` is forwarded to :func:`convert`.
     """
     with open(input_path, encoding="utf-8") as f:
         text = f.read()
@@ -1791,4 +1842,5 @@ def convert_file(
         cjk_fonts=cjk_fonts,
         mono_font=mono_font,
         symbol_font=symbol_font,
+        page_layout=page_layout,
     )
