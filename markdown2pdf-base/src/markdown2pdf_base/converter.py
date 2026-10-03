@@ -264,14 +264,17 @@ $font_settings
 $cjk_font_settings
 
 \newfontfamily{\headfont}{$head_font}
-% A heading is typeset at 15-24pt, so one line holds far fewer words than the
+% A heading is typeset at 13.5-24pt, so one line holds far fewer words than the
 % body text and a wide heading is the first thing to run past the right margin.
 % \RaggedRight is re-issued inside the heading so that its 2em of \rightskip
 % stretch is measured in the *heading's* font size (in the preamble it is
 % measured in the body size), which gives the line breaker room to move the
-% last word down. Hyphenation stays off, as in the body text, so the heading
-% wraps exactly like the paragraph under it and gains no hyphens the HTML5
-% document does not have.
+% last word down. It also keeps the heading flush left: the right margin is
+% reached only where the words run out, never stretched to it. Hyphenation
+% stays off, as in the body text, so the heading gains no hyphens the HTML5
+% document does not have, and the Lua filter below supplies the break
+% opportunities instead -- at the spaces, and for a code span also after a
+% word-joining character.
 \titleformat{\section}{\fontsize{24}{29}\selectfont\RaggedRight\bfseries\headfont}{\thesection}{1em}{}
 \titleformat{\subsection}{\fontsize{21}{26}\selectfont\RaggedRight\bfseries\headfont}{\thesubsection}{1em}{}
 \titleformat{\subsubsection}{\fontsize{18}{22}\selectfont\RaggedRight\bfseries\headfont}{\thesubsubsection}{1em}{}
@@ -369,11 +372,11 @@ local cjk_blocks = {
 local function char_class(ch)
   if ch:byte() < 0x80 then return 'latin' end
   local n = utf8.codepoint(ch)
-  
+
   for _, r in ipairs(symbol_blocks) do
     if n >= r[1] and n <= r[2] then return 'symbol' end
   end
-  
+
   for lang, blocks in pairs(cjk_blocks) do
     for _, r in ipairs(blocks) do
       if n >= r[1] and n <= r[2] then return lang end
@@ -415,7 +418,7 @@ local function wrap_scripts(text)
   local out = pandoc.List()
   local buf = {}
   local cls = 'latin'
-  
+
   local function flush()
     if #buf > 0 then
       local joined_buf = table.concat(buf)
@@ -431,7 +434,7 @@ local function wrap_scripts(text)
       buf = {}
     end
   end
-  
+
   for ch in text:gmatch(utf8.charpattern) do
     local c = char_class(ch)
     if c ~= cls then
@@ -622,15 +625,84 @@ local function latex_escape_text(s)
   return breakable_text(latex_escape_chars(s))
 end
 
--- Headings use the same breakable serialisation as body text, so a long
--- heading wraps like the paragraphs around it instead of running past the
--- right margin.
+-- A heading is set flush left and is broken at a space and nowhere else.
+-- This is `breakable_text` without its punctuation branch: the `\\penalty`
+-- it puts after a comma, a full stop or a closing bracket would let a
+-- heading split a phrase that the paragraph under it keeps whole, so the
+-- title would not read the way the text does.  An ideograph keeps its own
+-- opportunity, as in the body, because CJK has no spaces to break at.
+local function breakable_heading(escaped)
+  local out = {}
+  for _, tok in ipairs(tokenize(escaped)) do
+    out[#out + 1] = tok
+    if tok == ' ' or is_wide_char(tok) then out[#out + 1] = '\\\\allowbreak{}' end
+  end
+  return table.concat(out)
+end
+
+local function latex_escape_heading(s)
+  return breakable_heading(latex_escape_chars(s))
+end
+
+-- A code span in a heading follows the same rules as the words around it: a
+-- space is the first choice, exactly where the heading's own text breaks, and a
+-- word-joining character comes next so that `korean-romanizer` may become
+-- `korean-` / `romanizer` instead of having to fit a whole line by itself.
+-- Nothing else gets a chance.  `breakable_code` offers a break after every
+-- character, and keeping that here as a supposed last resort does not work:
+-- the penalty is cheap enough that the line breaker takes it even when a space
+-- or a joiner was available, which is how `Python` became `Pyth` / `on`.  A
+-- span with no break point at all now overhangs the margin instead, exactly as
+-- any other word too long to fit would.
+-- The keys are the tokens `tokenize` yields from an *escaped* string, so a
+-- character that `latex_escape_code` rewrites has to be listed in its escaped
+-- form: an underscore and a backslash both come out of it as LaTeX macros.
+-- Spelling either of them as the plain character would never match a token.
+local HEADING_CODE_BREAKS = {
+  ['-'] = true, ['/'] = true, ['='] = true,
+  ['\\\\_'] = true, ['\\\\textbackslash{}'] = true,
+}
+
+local function breakable_heading_code(escaped)
+  local out = {}
+  for _, tok in ipairs(tokenize(escaped)) do
+    out[#out + 1] = tok
+    if tok == ' ' or is_wide_char(tok) or HEADING_CODE_BREAKS[tok] then
+      out[#out + 1] = '\\\\allowbreak{}'
+    end
+  end
+  return table.concat(out)
+end
+
+local function code_heading_latex(el)
+  return '\\\\texttt{' .. breakable_heading_code(latex_escape_code(el.text)) .. '}'
+end
+
+-- An H6 is set as a bold-italic paragraph rather than through `\titleformat`,
+-- but it is still a title, so it has to break like one: at spaces, and never
+-- after punctuation or inside a word.  A filter only sees a `Span` after the
+-- inline filters have already run over its content, so the paragraph break
+-- tokens are taken back out of the serialised result instead of being produced
+-- differently to begin with.  Dropping a penalty can only remove a break
+-- opportunity, never add one, which is why this is safe to do on the finished
+-- string; every other block keeps the break rules it always had.
+--
+-- `SE_PUNCT` and `SE_ANY` hold no Lua pattern characters, so they can be used
+-- as patterns directly.
+local function breaks_at_spaces_only(latex)
+  return (latex:gsub(SE_PUNCT, ''):gsub(SE_ANY, ''))
+end
+
+-- Headings are serialised by `latex_escape_heading` and `code_heading_latex`
+-- rather than by the body writers, so that a long heading still wraps instead
+-- of running past the right margin: the text at its spaces, and a code span at
+-- its spaces and word joiners.
 hdr_walker = {
   Str = function(inl)
-    return pandoc.List{pandoc.RawInline('latex', latex_escape_text(inl.text))}
+    return pandoc.List{pandoc.RawInline('latex', latex_escape_heading(inl.text))}
   end,
   Code = function(el)
-    return pandoc.RawInline('latex', code_latex(el))
+    return pandoc.RawInline('latex', code_heading_latex(el))
   end,
 }
 
@@ -780,12 +852,12 @@ local function table_latex(tbl)
   end
   spec[#spec + 1] = '|'
   local colspec = table.concat(spec)
-  
+
   local begin = any_x and '\\\\begin{xltabular}{\\\\linewidth}{' .. colspec .. '}' or ('\\\\begin{longtable}{' .. colspec .. '}')
   local out = { begin }
   local head_rows = tbl.head and tbl.head.rows or {}
   local foot_rows = tbl.foot and tbl.foot.rows or {}
-  
+
   if #head_rows > 0 then
     for i, row in ipairs(head_rows) do
       local pre = (i == 1) and '\\\\hline\\\\rowcolor{black}' or ''
@@ -793,21 +865,21 @@ local function table_latex(tbl)
     end
     out[#out + 1] = '\\\\hline\\\\endhead'
   end
-  
+
   if #foot_rows > 0 then
     for _, row in ipairs(foot_rows) do
       out[#out + 1] = '\\\\hline\\\\rowcolor{shadecolor}' .. row_latex(row, '\\\\textit{', '}')
     end
     out[#out + 1] = '\\\\hline\\\\endlastfoot'
   end
-  
+
   for _, b in ipairs(tbl.bodies) do
     for i, row in ipairs(b.body) do
       local pre = (i == 1 and #head_rows > 0) and '' or '\\\\hline '
       out[#out + 1] = pre .. row_latex(row, nil)
     end
   end
-  
+
   if #foot_rows == 0 and #out > 0 then out[#out] = out[#out] .. '\\\\hline' end
   out[#out + 1] = any_x and '\\\\end{xltabular}' or '\\\\end{longtable}'
   return after_spacing(table.concat(out, '\\n'), false)
@@ -874,7 +946,7 @@ local function figure_latex(fig)
   local imgs = pandoc.List()
   local scan = { Image = function(el) imgs:insert(el) return el end }
   for i = 1, #fig.content do pandoc.walk_block(fig.content[i], scan) end
-  
+
   local im = {}
   for i = 1, #imgs do im[i] = image_inline_latex(imgs[i]).text end
   local out = { '\\\\noindent', table.concat(im, '\\\\par\\\\smallskip\\\\par') }
@@ -998,7 +1070,8 @@ function Span(el)
     return pandoc.RawInline('latex', '\\\\markhl{' .. serialize_nobreak(el.content) .. '}')
   end
   if has_class(el, 'h6') then
-    return pandoc.RawInline('latex', '\\\\textbf{\\\\emph{\\\\headfont{\\\\fontsize{12}{15}\\\\selectfont{' .. serialize_inlines(el.content) .. '}}}}')
+    local body = breaks_at_spaces_only(serialize_inlines(el.content))
+    return pandoc.RawInline('latex', '\\\\textbf{\\\\emph{\\\\headfont{\\\\fontsize{12}{15}\\\\selectfont{' .. body .. '}}}}')
   end
 end
 """)

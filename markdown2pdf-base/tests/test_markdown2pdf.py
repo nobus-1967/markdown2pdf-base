@@ -5,6 +5,7 @@ need the bounding boxes are skipped when it is unavailable.
 """
 
 import base64
+import itertools
 import re
 import shutil
 import subprocess
@@ -307,6 +308,264 @@ def test_convert_long_heading_survives_toc(tmp_path: Path) -> None:
     log = (tmp_path / "doc.log").read_text(encoding="utf-8", errors="replace")
     assert result.returncode == 0, log
     assert not re.search(r"^! ", log, re.MULTILINE), log
+
+
+@needs_pandoc
+@needs_pdftotext
+def test_heading_lines_are_flush_left(tmp_path: Path) -> None:
+    """Every line of a wrapped heading starts at the left margin.
+
+    A heading that needs three or four lines must not justify them: each line
+    begins at the left margin and stops where its words run out, so only a line
+    that happens to fill the measure reaches the right margin.  The test holds
+    for H1-H5, which are set at 13.5-24 pt and so wrap much sooner than the
+    body text does.
+    """
+    heading = (
+        "A Comprehensive Guide to Hangul Romanization Libraries in Python for "
+        "beginners and experts alike with practical examples"
+    )
+    md = "\n\n".join(f"{'#' * level} {heading}" for level in range(1, 6))
+
+    pdf_path = tmp_path / "flush.pdf"
+    pdf_path.write_bytes(convert(md, None) or b"")
+
+    left_edge = 72.0  # 25.4 mm margin
+    right_edge = _text_right_edge(pdf_path)
+    boxes = subprocess.run(
+        ["pdftotext", "-bbox-layout", str(pdf_path), "-"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+
+    starts, ends = [], []
+    for line in re.findall(r"<line .*?</line>", boxes, re.DOTALL):
+        text = "".join(re.findall(r"<word[^>]*>(.*?)</word>", line, re.DOTALL))
+        if not text.strip() or re.fullmatch(r"[\d\s]+", text):
+            continue  # the page number in the footer
+        starts.append(float(re.search(r'xMin="([\d.]+)"', line).group(1)))
+        ends.append(float(re.search(r'xMax="([\d.]+)"', line).group(1)))
+
+    # The heading is long enough to wrap at every level, not to fit on one line.
+    assert len(starts) >= 10, f"heading did not wrap: {len(starts)} lines"
+    assert max(ends) <= right_edge + 0.5
+
+    # Every line, not just the first one of each heading, sits on the left margin.
+    for start in starts:
+        assert abs(start - left_edge) <= 1.0, f"line starts at {start}, not flush left"
+
+    # Justification would push every line but the last out to the right margin.
+    assert sum(1 for end in ends if end >= right_edge - 1.0) <= 2
+
+
+@needs_pandoc
+def test_heading_breaks_only_at_spaces(tmp_path: Path) -> None:
+    """A heading offers no break after punctuation, only after a space.
+
+    ``seps`` marks a comma, a full stop, a slash and the rest with a
+    ``\\penalty`` so that a table cell can be split there.  A heading must not
+    use them: the title has to read the way the text under it reads.  A table
+    cell is used as the control, because that is where the penalties belong.
+    """
+    md = (
+        "# alpha, beta. gamma-delta epsilon/zeta eta=theta\n\n"
+        "| cell |\n|------|\n"
+        "| alpha, beta. gamma-delta epsilon/zeta eta=theta |\n"
+    )
+
+    font_config = FontConfig()
+    html, _ = _process_html(MarkdownToHTML().convert(md), None, "en", font_config)
+    html_path = tmp_path / "doc.html"
+    lua_path = tmp_path / "filter.lua"
+    html_path.write_text(html, encoding="utf-8")
+    _write_lua_filter(str(lua_path), dict(CJK_DEFAULT_FONTS), "ja")
+
+    result = subprocess.run(
+        [
+            "pandoc",
+            str(html_path),
+            "-t",
+            "latex",
+            "--lua-filter",
+            str(lua_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    heading_line = next(
+        line
+        for line in result.stdout.splitlines()
+        if "alpha," in line and "section{" in line
+    )
+    cell_line = next(
+        line
+        for line in result.stdout.splitlines()
+        if "alpha," in line and "section{" not in line
+    )
+
+    # The heading keeps the punctuation, just not the chance to break after it.
+    assert "alpha," in heading_line
+    assert "gamma-delta" in heading_line
+    assert "\\penalty" not in heading_line, heading_line
+
+    # The table cell still breaks after the punctuation it always did.
+    for mark in (",", ".", "-", "/", "="):
+        assert f"{mark}\\penalty500{{}}" in cell_line, cell_line
+
+
+@needs_pandoc
+def test_heading_code_breaks_at_word_joiners(tmp_path: Path) -> None:
+    """A code span in a heading breaks after a word-joining character.
+
+    A span such as ``korean-romanizer`` has no space to break at, so a heading
+    that offers nothing else has to put the whole span on one line -- which for
+    a 24 pt title means running past the right margin.  Each of ``-``, ``_``,
+    ``/``, ``=`` and ``\\`` therefore carries a zero-cost break opportunity.
+
+    The characters have to be listed in the form ``latex_escape_code`` emits:
+    an underscore arrives as ``\\_`` and a backslash as ``\\textbackslash{}``, so
+    a table keyed on the plain characters would never match a token.
+    """
+    md = "# title `a-b_c/d=e\\f` tail\n"
+
+    font_config = FontConfig()
+    html, _ = _process_html(MarkdownToHTML().convert(md), None, "en", font_config)
+    html_path = tmp_path / "doc.html"
+    lua_path = tmp_path / "filter.lua"
+    html_path.write_text(html, encoding="utf-8")
+    _write_lua_filter(str(lua_path), dict(CJK_DEFAULT_FONTS), "ja")
+
+    result = subprocess.run(
+        [
+            "pandoc",
+            str(html_path),
+            "-t",
+            "latex",
+            "--lua-filter",
+            str(lua_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    heading = next(
+        chunk for chunk in result.stdout.split("\\section{") if "\\texttt{" in chunk
+    )
+
+    for joiner in ("-", "\\_", "/", "=", "\\textbackslash{}"):
+        assert f"{joiner}\\allowbreak{{}}" in heading, (joiner, heading)
+
+
+@needs_pandoc
+@needs_pdftotext
+def test_heading_code_is_never_split_inside_a_word(tmp_path: Path) -> None:
+    """No heading cuts a code span in half, at any level.
+
+    ``breakable_code`` puts a penalty after every character so that a long span
+    in the *body* cannot run past the margin.  Reusing that in a heading is not
+    a last resort -- the line breaker takes it even when a space or a word
+    joiner was free, and ``Python`` came out as ``Pyth`` / ``on``.  A heading
+    span may only break at a space or after a word joiner.
+
+    The check reconstructs each split from the end of one line and the start of
+    the next, so it is found wherever the cut falls.
+    """
+    heading = (
+        "Полное руководство по библиотекам романизации Хангыля в `Python`: "
+        "`korean-romanizer` и `koroman`"
+    )
+    md = "\n\n".join(f"{'#' * level} {heading}" for level in range(1, 6))
+
+    pdf = tmp_path / "out.pdf"
+    convert(md, pdf)
+    assert pdf.exists()
+
+    lines = [
+        line
+        for line in subprocess.run(
+            ["pdftotext", "-layout", str(pdf), "-"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+
+    for token in ("Python", "korean-romanizer"):
+        joiners = "-_/="
+        for index in range(len(token) - 1):
+            head, tail = token[: index + 1], token[index + 1 :]
+            # a split straight after a joiner character is the intended break
+            if head[-1] in joiners:
+                continue
+            for first, second in itertools.pairwise(lines):
+                if first.rstrip().endswith(head) and second.lstrip().startswith(tail):
+                    pytest.fail(f"{token!r} split as {head!r} / {tail!r}")
+
+    # And the deliberate breaks are all still used.
+    joined = "\n".join(lines)
+    assert "korean-\n" in joined or "korean- " in joined, joined
+
+
+@needs_pandoc
+def test_h6_breaks_like_the_other_headings(tmp_path: Path) -> None:
+    """H6 is set as a paragraph but must break like a title.
+
+    An H6 goes through `_h6_to_bold_italic_para` and is emitted as a bold-italic
+    line in the heading font, so it never reaches `\\titleformat` and never gets
+    `hdr_walker`.  It used to keep the paragraph break rules and could therefore
+    split after punctuation and inside a code span.  The paragraph break tokens
+    are taken back out, which leaves the space breaks and nothing else.
+
+    A paragraph in the same document is the control: it must keep every token it
+    had, so that stripping in the H6 does not leak into the body.
+    """
+    title = (
+        "Полное руководство по библиотекам романизации Хангыля в `Python`: "
+        "`korean-romanizer` и `koroman`, часть вторая"
+    )
+    md = f"###### {title}\n\n{title} и обычный абзац под ним.\n"
+
+    font_config = FontConfig()
+    html, _ = _process_html(MarkdownToHTML().convert(md), None, "ru", font_config)
+    html_path = tmp_path / "doc.html"
+    lua_path = tmp_path / "filter.lua"
+    html_path.write_text(html, encoding="utf-8")
+    _write_lua_filter(str(lua_path), dict(CJK_DEFAULT_FONTS), "ja")
+
+    result = subprocess.run(
+        [
+            "pandoc",
+            str(html_path),
+            "-t",
+            "latex",
+            "--lua-filter",
+            str(lua_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    h6_line = next(
+        line for line in result.stdout.splitlines() if "\\fontsize{12}{15}" in line
+    )
+    # Only the space breaks survive in the heading.
+    assert "\\penalty" not in h6_line, h6_line
+    assert "\\texttt{Python}" in h6_line, h6_line
+    assert "\\texttt{korean-romanizer}" in h6_line, h6_line
+
+    # The paragraph below it is untouched: same code span, penalties and all.
+    para = result.stdout.split(h6_line, 1)[1]
+    assert "\\penalty500{}" in para, para[:400]
+    assert "\\penalty1000{}" in para, para[:400]
 
 
 @needs_pandoc
