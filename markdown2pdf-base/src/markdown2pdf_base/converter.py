@@ -231,7 +231,13 @@ _LATEX_PREAMBLE_TEMPLATE: Final[Template] = Template(
     linecolor=shadecolor, linewidth=10pt,
     innerleftmargin=20pt, innerrightmargin=0pt,
     innertopmargin=4pt, innerbottommargin=0pt,
-    leftmargin=0pt, rightmargin=0pt, skipabove=9pt, skipbelow=5pt]
+    leftmargin=0pt, rightmargin=0pt, skipabove=9pt, skipbelow=5pt]%
+  % mdframed resets \rightskip and \@rightskip to 0pt while it opens its
+  % content box, which would silently justify the quote and make it the odd
+  % one out next to headings, paragraphs and lists.  Re-issue the ragged-right
+  % rule inside the box; \RaggedRight also restores \@rightskip, so nested
+  % lists inherit the same rule.
+  \RaggedRight
 }{%
   \end{mdframed}%
 }

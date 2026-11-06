@@ -26,13 +26,14 @@ All `markdown2html5-base` 0.6.1 operations are supported:
 - Wrapping long strings (inline code and code blocks; in a heading only at spaces and word joiners)
 - HTML comments (`[comment]: #`)
 - Backslash escaping
+- Uniform ragged-right alignment for headings, paragraphs, every list kind (including task lists) and blockquotes
 - Portrait or landscape page (`--page landscape`)
 
 Fonts for PDF output can be overridden, including the CJK fonts: see [Font Stacks Documentation](https://github.com/nobus-1967/fonts-stack-cjk/blob/main/Fonts.md) to choose suitable fonts.
 
 ## How it works
 
-You can compare conversion results: the original [Markdown file](./test_page/Test_Page.md) → the [HTML5 file](./test_page/Test_Page.html) via markdown2html5-base → the [PDF file](./test_page/Test_Page.pdf) via markdown2pdf-base.
+You can compare conversion results: the original [Markdown file](./test_page/Test_Page.md) → the [HTML5 file](./test_page/Test_Page.html) via markdown2html5-base → the [PDF file (portrait)](./test_page/Test_Page.pdf) and the [PDF file (landscape)](./test_page/Test_Page_Landscape.pdf) via markdown2pdf-base.
 
 You can also check the result from the command line: `markdown2pdf-base input.md -o output.pdf`. Add `--page landscape` for a rotated page (portrait by default); see the [package README](./markdown2pdf-base/README.md) for the full option list.
 

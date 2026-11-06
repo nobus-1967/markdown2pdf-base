@@ -791,6 +791,134 @@ def test_ragged_right_body_text(tmp_path: Path) -> None:
     assert pdf_path.stat().st_size > 100
 
 
+needs_xelatex = pytest.mark.skipif(
+    shutil.which("xelatex") is None,
+    reason="xelatex binary environment is not available",
+)
+
+_ALIGNMENT_FILLER = (
+    "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi "
+    "omicron pi rho sigma tau upsilon phi chi psi omega "
+)
+
+
+def _alignment_probe_source(preamble: str) -> str:
+    """Return a standalone LaTeX document that reports ``\\rightskip`` per construct.
+
+    Every paragraph XeLaTeX starts triggers a probe that writes the current
+    ``\\rightskip`` value to the log, tagged with the construct that is being
+    typeset.  ``\\RaggedRight`` leaves ``0pt plus 2em`` there; a justified
+    paragraph is left with ``0pt`` and no stretch, which is exactly the
+    difference the alignment contract rules out.
+    """
+    filler = _ALIGNMENT_FILLER * 2
+    lines = [
+        r"\documentclass[12pt]{article}",
+        r"\usepackage{hyperref}",
+        preamble,
+        (
+            r"\AddToHook{para/begin}{\typeout{ALIGN construct=\construct\space"
+            r" rightskip=\the\rightskip}}"
+        ),
+        r"\begin{document}",
+        r"\def\construct{heading}",
+        r"\section{Heading long enough to wrap onto a second line at 24 pt}",
+        r"\def\construct{paragraph}",
+        filler,
+        r"\def\construct{bullet}",
+        r"\begin{itemize}",
+        f"\\item {filler}",
+        f"\\item {filler}",
+        r"\end{itemize}",
+        r"\def\construct{ordered}",
+        r"\begin{enumerate}",
+        f"\\item {filler}",
+        f"\\item {filler}",
+        r"\end{enumerate}",
+        r"\def\construct{todo}",
+        r"\begin{itemize}",
+        f"\\item \\checkboxempty{{}} {filler}",
+        f"\\item \\checkboxchecked{{}} {filler}",
+        r"\end{itemize}",
+        r"\def\construct{quote}",
+        r"\begin{quote}",
+        filler,
+        r"\end{quote}",
+        r"\end{document}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _alignment_report(log: str) -> dict[str, set[str]]:
+    """Group the probe output in ``log`` by construct name.
+
+    A construct may report more than one value when it opens nested paragraph
+    contexts (``mdframed`` does this), so each name maps to the set of values
+    observed for it.
+    """
+    report: dict[str, set[str]] = {}
+    for construct, value in re.findall(r"ALIGN construct=(\S+)\s+rightskip=(.+)", log):
+        report.setdefault(construct, set()).add(value.strip())
+    return report
+
+
+def test_quote_reissues_ragged_right_after_mdframed_reset() -> None:
+    """The quote wrapper restores ``\\RaggedRight`` after ``mdframed`` resets it.
+
+    ``mdframed`` zeroes ``\\rightskip`` and ``\\@rightskip`` while opening its
+    content box, so a quote would be justified unless the wrapper re-issues the
+    rule from inside that box.
+    """
+    preamble = _make_latex_header(FontConfig(), dict(CJK_DEFAULT_FONTS), "ja")
+    match = re.search(r"\\renewenvironment\{quote\}\{.*?\n\}\n", preamble, re.DOTALL)
+    assert match is not None, "quote environment is not redefined in the preamble"
+    block = match.group(0)
+    assert (
+        block.index(r"\begin{mdframed}")
+        < block.index(r"\RaggedRight")
+        < block.index(r"\end{mdframed}")
+    ), "\\RaggedRight must sit inside the mdframed content box"
+
+
+@needs_xelatex
+def test_body_alignment_matches_headings(tmp_path: Path) -> None:
+    """Paragraphs, every list kind and quotes all use the heading ragged-right rule.
+
+    Headings re-issue ``\\RaggedRight`` via ``\\titleformat``; body paragraphs,
+    all list kinds (including todo lists) and block quotes must start from the
+    same non-zero ``\\rightskip`` stretch rather than from justified ``0pt``.
+    """
+    config = FontConfig()
+    preamble = _make_latex_header(config, dict(CJK_DEFAULT_FONTS), "ja")
+    tex_path = tmp_path / "align.tex"
+    tex_path.write_text(_alignment_probe_source(preamble), encoding="utf-8")
+
+    result = subprocess.run(
+        ["xelatex", "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    log = (tmp_path / "align.log").read_text(encoding="utf-8", errors="replace")
+    assert result.returncode == 0, log[-2000:]
+
+    observed = _alignment_report(log)
+    constructs = {"heading", "paragraph", "bullet", "ordered", "todo", "quote"}
+    assert constructs <= observed.keys(), observed
+    for name in sorted(constructs):
+        assert len(observed[name]) == 1, (
+            f"{name} mixes alignment rules: {sorted(observed[name])}"
+        )
+
+    rules = {next(iter(observed[name])) for name in constructs}
+    assert len(rules) == 1, f"constructs disagree about alignment: {observed}"
+    rule = rules.pop()
+    stretch = re.fullmatch(r"0\.0pt plus (\d+(?:\.\d+)?)pt", rule)
+    assert stretch is not None, f"not the ragged-right rule: {rule!r}"
+    assert float(stretch.group(1)) > 0, "ragged-right stretch must be non-zero"
+
+
 @needs_pandoc
 def test_convert_mark_highlighted(tmp_path: Path) -> None:
     """Highlighted text (soul \\hl) must tolerate punctuation in its argument."""
